@@ -25,9 +25,9 @@ uv run main.py      # start het spel
 
 Vul hier een korte beschrijving van je game aan (max. ongeveer 10 regels):
 
-- **Idee:** wat is het algemene idee van je game en hoe win of verlies je?
-- **Functionaliteiten:** welke onderdelen wil je implementeren? Noem eerst wat je zeker wilt bouwen en daarna wat je erbij doet als er tijd over is.
-- **Besturing:** hoe speelt de speler het spel?
+- **Idee:** De game is een top-down roguelike shooter geinspireerd door Vampire Survivors. De basis is dat je rondloopt als de karakter en de vijanden die rondlopen dood en hun xp verzamelt om levels te verzamelen en up te graden.
+- **Functionaliteiten:** ik wil de speler implementeren met standard top-down bewegingen en automatisch schieten op de dichtsbijzijnde vijand. Daarnaast wil ik minstens twee soorten vijanden implementeren die spawnen rondom de speler, waarvan een een tragere maar sterkere vijand is en een kleinere, snellere, maar zwakkere vijand. Als laatst is belangrijk dat het level systeem wordt geimplementeerd. Dus dat je levels kan verzeamelen en dan als je een level omhoog gaat dat je een upgrade kan kiezen.
+- **Besturing:** Je gebruikt WASD of pijltjes, er wordt automatisch geschoten op de dichtsbijzijnde vijand, en je kan je upgrade kiezen met 1, 2, of 3.
 
 ## Persoonlijke leerdoelen
 
@@ -35,9 +35,9 @@ Bij het aanmelden voor deze opdracht heb je je eigen leerdoelen bepaald.
 Vul ze hieronder in. Formuleer ze concreet, zodat je er aan het einde
 op kunt terugkijken: wat wil je leren of kunnen, en hoe merk je dat het gelukt is?
 
-- _Leerdoel 1_
-- _Leerdoel 2_
-- _Leerdoel 3_
+- Ik leer Pygame gebruiken, zoals de game loop, input, drawing, en objecten laten bewegen.
+- Ik leer mijn code netjes op te delen in aparte bestanden en classes, zodat mijn game makkelijk uit te breiden blijft.
+- Ik leer de basis van game-logica bouwen, zoals botsingen, vijanden laten spawnen en een upgrade-systeem.
 
 ## Werkwijze
 
