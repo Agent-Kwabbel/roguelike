@@ -1,18 +1,17 @@
 import pygame
 
-
-W, H = 960, 640
-FPS = 60
-TILE = 64
-PLAYER_SPEED = 220
-PLAYER_RADIUS = 14
+from settings import W, H, FPS, TILE, SPAWN_INTERVAL
+from player import Player
+from enemy import spawn_enemy
 
 
 def init_game():
     """Maak de beginstaat van het spel aan."""
     return {
         "running": True,
-        "player": pygame.Vector2(0, 0),
+        "player": Player(),
+        "enemies": [],
+        "spawn_timer": 0,
         "camera": pygame.Vector2(0, 0),
     }
 
@@ -21,27 +20,22 @@ def handle_input(state):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             state["running"] = False
-
-    keys = pygame.key.get_pressed()
-    move = pygame.Vector2(0, 0)
-    if keys[pygame.K_w] or keys[pygame.K_UP]:
-        move.y -= 1
-    if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-        move.y += 1
-    if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-        move.x -= 1
-    if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-        move.x += 1
-
-    if move.length() > 0:
-        move = move.normalize()
-    state["move"] = move
+    state["player"].read_input()
     return state
 
 
 def update(state, dt):
-    state["player"] += state["move"] * PLAYER_SPEED * dt
-    state["camera"] = state["player"] - pygame.Vector2(W / 2, H / 2)
+    player = state["player"]
+    player.update(dt)
+    state["camera"] = player.pos - pygame.Vector2(W / 2, H / 2)
+
+    state["spawn_timer"] += dt
+    if state["spawn_timer"] >= SPAWN_INTERVAL:
+        state["spawn_timer"] = 0
+        state["enemies"].append(spawn_enemy(player.pos))
+
+    for enemy in state["enemies"]:
+        enemy.update(dt, player.pos)
     return state
 
 
@@ -56,9 +50,11 @@ def draw_floor(screen, camera):
 
 
 def draw(screen, state):
-    draw_floor(screen, state["camera"])
-    pos = state["player"] - state["camera"]
-    pygame.draw.circle(screen, (60, 120, 220), pos, PLAYER_RADIUS)
+    camera = state["camera"]
+    draw_floor(screen, camera)
+    for enemy in state["enemies"]:
+        enemy.draw(screen, camera)
+    state["player"].draw(screen, camera)
     pygame.display.flip()
 
 
