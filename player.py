@@ -7,6 +7,8 @@ from settings import (
     INVIS_TIME,
     FIRE_INTERVAL,
     FIRE_RANGE,
+    XP_BASE,
+    XP_GROWTH,
 )
 from bullet import Bullet
 
@@ -19,6 +21,8 @@ class Player:
         self.hp = PLAYER_MAX_HP
         self.invis_timer = 0
         self.fire_timer = 0
+        self.xp = 0
+        self.level = 1
 
     def read_input(self):
         keys = pygame.key.get_pressed()
@@ -46,6 +50,15 @@ class Player:
             return
         self.hp -= amount
         self.invis_timer = INVIS_TIME
+
+    def xp_needed(self):
+        return XP_BASE + (self.level - 1) * XP_GROWTH
+
+    def add_xp(self, amount):
+        self.xp += amount
+        while self.xp >= self.xp_needed():
+            self.xp -= self.xp_needed()
+            self.level += 1
 
     def shoot(self, enemies):
         if self.fire_timer > 0:

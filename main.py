@@ -1,8 +1,18 @@
 import pygame
 
-from settings import W, H, FPS, TILE, SPAWN_INTERVAL, ENEMY_DAMAGE, PLAYER_MAX_HP
+from settings import (
+    W,
+    H,
+    FPS,
+    TILE,
+    SPAWN_INTERVAL,
+    ENEMY_DAMAGE,
+    PLAYER_MAX_HP,
+    PICKUP_RANGE,
+)
 from player import Player
 from enemy import spawn_enemy
+from orb import Orb
 
 
 def init_game():
@@ -12,6 +22,7 @@ def init_game():
         "player": Player(),
         "enemies": [],
         "bullets": [],
+        "orbs": [],
         "spawn_timer": 0,
         "camera": pygame.Vector2(0, 0),
     }
@@ -44,6 +55,9 @@ def update(state, dt):
     for bullet in state["bullets"]:
         bullet.update(dt)
 
+    for orb in state["orbs"]:
+        orb.update(dt, player.pos, PICKUP_RANGE)
+
     handle_collisions(state)
 
     if player.hp <= 0:
@@ -65,7 +79,17 @@ def handle_collisions(state):
         if player.pos.distance_to(enemy.pos) < player.radius + enemy.radius:
             player.take_damage(ENEMY_DAMAGE)
 
+    for enemy in state["enemies"]:
+        if enemy.hp <= 0:
+            state["orbs"].append(Orb(enemy.pos, enemy.xp))
+
+    for orb in state["orbs"]:
+        if player.pos.distance_to(orb.pos) < player.radius + orb.radius:
+            player.add_xp(orb.value)
+            orb.value = 0
+
     state["enemies"] = [e for e in state["enemies"] if e.hp > 0]
+    state["orbs"] = [o for o in state["orbs"] if o.value > 0]
     state["bullets"] = [b for b in state["bullets"] if b.life > 0]
 
 
@@ -85,15 +109,27 @@ def draw_hp(screen, player):
         pygame.draw.rect(screen, color, (10 + i * 26, 10, 20, 20))
 
 
+def draw_xp(screen, player):
+    pygame.draw.rect(screen, (30, 30, 50), (0, H - 12, W, 12))
+    width = W * player.xp / player.xp_needed()
+    pygame.draw.rect(screen, (80, 220, 240), (0, H - 12, width, 12))
+    font = pygame.font.Font(None, 24)
+    text = font.render(f"Level {player.level}", True, (255, 255, 255))
+    screen.blit(text, (10, H - 36))
+
+
 def draw(screen, state):
     camera = state["camera"]
     draw_floor(screen, camera)
     for enemy in state["enemies"]:
         enemy.draw(screen, camera)
+    for orb in state["orbs"]:
+        orb.draw(screen, camera)
     for bullet in state["bullets"]:
         bullet.draw(screen, camera)
     state["player"].draw(screen, camera)
     draw_hp(screen, state["player"])
+    draw_xp(screen, state["player"])
     pygame.display.flip()
 
 

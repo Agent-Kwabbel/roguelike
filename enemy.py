@@ -15,6 +15,7 @@ class Enemy:
         self.radius = stats["radius"]
         self.color = stats["color"]
         self.hp = stats["hp"]
+        self.xp = stats["xp"]
 
     def update(self, dt, target):
         direction = target - self.pos

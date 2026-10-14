@@ -12,8 +12,8 @@ SPAWN_INTERVAL = 1.0
 SPAWN_DISTANCE = 600
 
 ENEMY_TYPES = {
-    "walker": {"speed": 70, "radius": 16, "color": (200, 50, 50), "hp": 3},
-    "runner": {"speed": 140, "radius": 10, "color": (230, 150, 40), "hp": 1},
+    "walker": {"speed": 70, "radius": 16, "color": (200, 50, 50), "hp": 3, "xp": 1},
+    "runner": {"speed": 140, "radius": 10, "color": (230, 150, 40), "hp": 1, "xp": 2},
 }
 
 # Schieten
@@ -28,3 +28,10 @@ BULLET_LIFETIME = 1.5
 PLAYER_MAX_HP = 5
 INVIS_TIME = 1.0
 ENEMY_DAMAGE = 1
+
+# XP
+ORB_RADIUS = 5
+ORB_COLOR = (80, 220, 240)
+PICKUP_RANGE = 90
+XP_BASE = 5
+XP_GROWTH = 3
