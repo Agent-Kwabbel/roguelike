@@ -1,14 +1,14 @@
 import pygame
 
-from settings import BULLET_SPEED, BULLET_RADIUS, BULLET_DAMAGE, BULLET_LIFETIME
+from settings import BULLET_SPEED, BULLET_RADIUS, BULLET_LIFETIME
 
 
 class Bullet:
-    def __init__(self, pos, direction):
+    def __init__(self, pos, direction, damage):
         self.pos = pygame.Vector2(pos)
         self.velocity = direction * BULLET_SPEED
         self.radius = BULLET_RADIUS
-        self.damage = BULLET_DAMAGE
+        self.damage = damage
         self.life = BULLET_LIFETIME
 
     def update(self, dt):

@@ -7,6 +7,8 @@ from settings import (
     INVIS_TIME,
     FIRE_INTERVAL,
     FIRE_RANGE,
+    BULLET_DAMAGE,
+    PICKUP_RANGE,
     XP_BASE,
     XP_GROWTH,
 )
@@ -18,11 +20,17 @@ class Player:
         self.pos = pygame.Vector2(0, 0)
         self.move = pygame.Vector2(0, 0)
         self.radius = PLAYER_RADIUS
+        self.speed = PLAYER_SPEED
+        self.max_hp = PLAYER_MAX_HP
         self.hp = PLAYER_MAX_HP
+        self.fire_interval = FIRE_INTERVAL
+        self.damage = BULLET_DAMAGE
+        self.pickup_range = PICKUP_RANGE
         self.invis_timer = 0
         self.fire_timer = 0
         self.xp = 0
         self.level = 1
+        self.pending_upgrades = 0
 
     def read_input(self):
         keys = pygame.key.get_pressed()
@@ -41,7 +49,7 @@ class Player:
         self.move = move
 
     def update(self, dt):
-        self.pos += self.move * PLAYER_SPEED * dt
+        self.pos += self.move * self.speed * dt
         self.invis_timer = max(0, self.invis_timer - dt)
         self.fire_timer = max(0, self.fire_timer - dt)
 
@@ -59,6 +67,7 @@ class Player:
         while self.xp >= self.xp_needed():
             self.xp -= self.xp_needed()
             self.level += 1
+            self.pending_upgrades += 1
 
     def shoot(self, enemies):
         if self.fire_timer > 0:
@@ -72,9 +81,9 @@ class Player:
                 target = enemy
         if target is None:
             return None
-        self.fire_timer = FIRE_INTERVAL
+        self.fire_timer = self.fire_interval
         direction = (target.pos - self.pos).normalize()
-        return Bullet(self.pos, direction)
+        return Bullet(self.pos, direction, self.damage)
 
     def draw(self, screen, camera):
         # knipperen tijdens invis frames

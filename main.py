@@ -7,12 +7,11 @@ from settings import (
     TILE,
     SPAWN_INTERVAL,
     ENEMY_DAMAGE,
-    PLAYER_MAX_HP,
-    PICKUP_RANGE,
 )
 from player import Player
 from enemy import spawn_enemy
 from orb import Orb
+from upgrades import pick_choices
 
 
 def init_game():
@@ -25,6 +24,7 @@ def init_game():
         "orbs": [],
         "spawn_timer": 0,
         "camera": pygame.Vector2(0, 0),
+        "choices": None,
     }
 
 
@@ -32,12 +32,22 @@ def handle_input(state):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             state["running"] = False
+        if event.type == pygame.KEYDOWN and state["choices"]:
+            keys = [pygame.K_1, pygame.K_2, pygame.K_3]
+            if event.key in keys:
+                index = keys.index(event.key)
+                if index < len(state["choices"]):
+                    state["choices"][index]["apply"](state["player"])
+                    state["choices"] = None
     state["player"].read_input()
     return state
 
 
 def update(state, dt):
     player = state["player"]
+    if state["choices"]:
+        return state
+
     player.update(dt)
     state["camera"] = player.pos - pygame.Vector2(W / 2, H / 2)
 
@@ -56,9 +66,13 @@ def update(state, dt):
         bullet.update(dt)
 
     for orb in state["orbs"]:
-        orb.update(dt, player.pos, PICKUP_RANGE)
+        orb.update(dt, player.pos, player.pickup_range)
 
     handle_collisions(state)
+
+    if player.pending_upgrades > 0:
+        player.pending_upgrades -= 1
+        state["choices"] = pick_choices()
 
     if player.hp <= 0:
         return init_game()
@@ -104,7 +118,7 @@ def draw_floor(screen, camera):
 
 
 def draw_hp(screen, player):
-    for i in range(PLAYER_MAX_HP):
+    for i in range(player.max_hp):
         color = (220, 40, 40) if i < player.hp else (70, 30, 30)
         pygame.draw.rect(screen, color, (10 + i * 26, 10, 20, 20))
 
@@ -116,6 +130,23 @@ def draw_xp(screen, player):
     font = pygame.font.Font(None, 24)
     text = font.render(f"Level {player.level}", True, (255, 255, 255))
     screen.blit(text, (10, H - 36))
+
+
+def draw_upgrade_menu(screen, choices):
+    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 170))
+    screen.blit(overlay, (0, 0))
+
+    big = pygame.font.Font(None, 48)
+    small = pygame.font.Font(None, 32)
+
+    title = big.render("Kies een upgrade", True, (255, 255, 255))
+    screen.blit(title, (W / 2 - title.get_width() / 2, 150))
+
+    for i, upgrade in enumerate(choices):
+        line = f"{i + 1}. {upgrade['name']} - {upgrade['desc']}"
+        text = small.render(line, True, (255, 255, 255))
+        screen.blit(text, (W / 2 - text.get_width() / 2, 250 + i * 50))
 
 
 def draw(screen, state):
@@ -130,6 +161,8 @@ def draw(screen, state):
     state["player"].draw(screen, camera)
     draw_hp(screen, state["player"])
     draw_xp(screen, state["player"])
+    if state["choices"]:
+        draw_upgrade_menu(screen, state["choices"])
     pygame.display.flip()
 
 
