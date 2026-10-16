@@ -6,6 +6,9 @@ from settings import (
     FPS,
     TILE,
     SPAWN_INTERVAL,
+    SPAWN_INTERVAL_MIN,
+    SPAWN_INTERVAL_DECAY,
+    MAX_ENEMIES,
     ENEMY_DAMAGE,
 )
 from player import Player
@@ -23,6 +26,7 @@ def init_game():
         "bullets": [],
         "orbs": [],
         "spawn_timer": 0,
+        "time": 0,
         "camera": pygame.Vector2(0, 0),
         "choices": None,
     }
@@ -51,10 +55,15 @@ def update(state, dt):
     player.update(dt)
     state["camera"] = player.pos - pygame.Vector2(W / 2, H / 2)
 
+    state["time"] += dt
+    interval = max(
+        SPAWN_INTERVAL_MIN, SPAWN_INTERVAL - state["time"] * SPAWN_INTERVAL_DECAY
+    )
     state["spawn_timer"] += dt
-    if state["spawn_timer"] >= SPAWN_INTERVAL:
+    if state["spawn_timer"] >= interval:
         state["spawn_timer"] = 0
-        state["enemies"].append(spawn_enemy(player.pos))
+        if len(state["enemies"]) < MAX_ENEMIES:
+            state["enemies"].append(spawn_enemy(player.pos, state["time"]))
 
     bullet = player.shoot(state["enemies"])
     if bullet:
@@ -132,6 +141,12 @@ def draw_xp(screen, player):
     screen.blit(text, (10, H - 36))
 
 
+def draw_time(screen, seconds):
+    font = pygame.font.Font(None, 32)
+    text = font.render(f"{int(seconds) // 60}:{int(seconds) % 60:02d}", True, (255, 255, 255))
+    screen.blit(text, (W - text.get_width() - 10, 10))
+
+
 def draw_upgrade_menu(screen, choices):
     overlay = pygame.Surface((W, H), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 170))
@@ -161,6 +176,7 @@ def draw(screen, state):
     state["player"].draw(screen, camera)
     draw_hp(screen, state["player"])
     draw_xp(screen, state["player"])
+    draw_time(screen, state["time"])
     if state["choices"]:
         draw_upgrade_menu(screen, state["choices"])
     pygame.display.flip()

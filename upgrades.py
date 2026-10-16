@@ -7,11 +7,15 @@ from settings import (
     UPGRADE_SPEED,
     UPGRADE_PICKUP,
     UPGRADE_HP,
+    FIRE_INTERVAL_MIN,
+    PLAYER_SPEED_MAX,
 )
 
 
 def faster_fire(player):
-    player.fire_interval *= UPGRADE_FIRE_FACTOR
+    player.fire_interval = max(
+        FIRE_INTERVAL_MIN, player.fire_interval * UPGRADE_FIRE_FACTOR
+    )
 
 
 def more_damage(player):
@@ -19,7 +23,7 @@ def more_damage(player):
 
 
 def faster_move(player):
-    player.speed += UPGRADE_SPEED
+    player.speed = min(PLAYER_SPEED_MAX, player.speed + UPGRADE_SPEED)
 
 
 def bigger_pickup(player):
