@@ -1,42 +1,37 @@
 import pygame
 
+import progress
 import sprites
 from menus import draw_background, text_center, panel, YELLOW, GREY
 from settings import W
 
-# check krijgt de stats van de run en de save, gems is de beloning
+# check krijgt de stats van de run en de save, coins is de beloning
 ACHIEVEMENTS = [
-    {"key": "first_blood", "name": "Eerste bloed", "desc": "Versla een vijand", "gems": 5,
+    {"key": "first_blood", "name": "Eerste bloed", "desc": "Versla een vijand", "coins": 50,
      "check": lambda s, bp: s.get("kills", 0) >= 1},
-    {"key": "butcher", "name": "Slager", "desc": "500 kills in een run", "gems": 20,
+    {"key": "butcher", "name": "Slager", "desc": "500 kills in een run", "coins": 200,
      "check": lambda s, bp: s.get("kills", 0) >= 500},
-    {"key": "genocide", "name": "Dat zijn er veel", "desc": "5000 kills in totaal", "gems": 50,
+    {"key": "genocide", "name": "Dat zijn er veel", "desc": "5000 kills in totaal", "coins": 500,
      "check": lambda s, bp: bp["totals"].get("kills", 0) >= 5000},
-    {"key": "survivor", "name": "Overlever", "desc": "Overleef 5 minuten", "gems": 15,
+    {"key": "survivor", "name": "Overlever", "desc": "Overleef 5 minuten", "coins": 150,
      "check": lambda s, bp: s.get("time", 0) >= 300},
-    {"key": "marathon", "name": "Marathon", "desc": "Overleef 15 minuten", "gems": 50,
+    {"key": "marathon", "name": "Marathon", "desc": "Overleef 15 minuten", "coins": 500,
      "check": lambda s, bp: s.get("time", 0) >= 900},
-    {"key": "boss", "name": "Baasbreker", "desc": "Versla een baas", "gems": 15,
+    {"key": "boss", "name": "Baasbreker", "desc": "Versla een baas", "coins": 150,
      "check": lambda s, bp: s.get("bosses", 0) >= 1},
-    {"key": "elite", "name": "Elite jager", "desc": "Versla 10 elites in totaal", "gems": 15,
+    {"key": "elite", "name": "Elite jager", "desc": "Versla 10 elites in totaal", "coins": 150,
      "check": lambda s, bp: bp["totals"].get("elites", 0) >= 10},
-    {"key": "level20", "name": "Hoog niveau", "desc": "Haal level 20 in een run", "gems": 20,
+    {"key": "level20", "name": "Hoog niveau", "desc": "Haal level 20 in een run", "coins": 200,
      "check": lambda s, bp: s.get("level", 0) >= 20},
-    {"key": "extreme", "name": "Masochist", "desc": "Overleef 3 minuten op Extreme", "gems": 30,
+    {"key": "extreme", "name": "Masochist", "desc": "Overleef 3 minuten op Extreme", "coins": 300,
      "check": lambda s, bp: s.get("extreme_time", 0) >= 180},
-    {"key": "rich", "name": "Rijkaard", "desc": "Heb 5000 coins", "gems": 25,
+    {"key": "rich", "name": "Rijkaard", "desc": "Heb 5000 coins", "coins": 250,
      "check": lambda s, bp: bp["coins"] >= 5000},
-    {"key": "whale", "name": "Walvis", "desc": "Koop het Walvis pakket", "gems": 0,
-     "check": lambda s, bp: bp.get("whale", False)},
-    {"key": "gambler", "name": "Gokverslaafd", "desc": "Open 10 lootboxen", "gems": 10,
-     "check": lambda s, bp: bp.get("boxes_opened", 0) >= 10},
-    {"key": "revive", "name": "Betaal om te winnen", "desc": "Koop een extra leven", "gems": 5,
-     "check": lambda s, bp: s.get("revived", False)},
-    {"key": "streak", "name": "Onstopbaar", "desc": "Kill streak van 50", "gems": 20,
+    {"key": "streak", "name": "Onstopbaar", "desc": "Kill streak van 50", "coins": 200,
      "check": lambda s, bp: s.get("best_streak", 0) >= 50},
-    {"key": "chests", "name": "Schatzoeker", "desc": "Open 5 kisten in een run", "gems": 15,
+    {"key": "chests", "name": "Schatzoeker", "desc": "Open 5 kisten in een run", "coins": 150,
      "check": lambda s, bp: s.get("chests", 0) >= 5},
-    {"key": "arsenal", "name": "Wandelend arsenaal", "desc": "Heb 6 wapens tegelijk", "gems": 25,
+    {"key": "arsenal", "name": "Wandelend arsenaal", "desc": "Heb 6 wapens tegelijk", "coins": 250,
      "check": lambda s, bp: s.get("weapons", 0) >= 6},
 ]
 
@@ -44,23 +39,19 @@ toasts = []
 
 
 def check(stats, bp):
-    """Kijk welke achievements nieuw gehaald zijn en geef de gems."""
+    """Kijk welke achievements nieuw gehaald zijn en geef de beloning."""
     new = []
     for achievement in ACHIEVEMENTS:
         if achievement["key"] in bp["achievements"]:
             continue
         if achievement["check"](stats, bp):
             bp["achievements"].append(achievement["key"])
-            bp["gems"] += achievement["gems"]
+            bp["coins"] += achievement["coins"]
+            for item in progress.achievement_items(achievement["key"]):
+                progress.give(bp, item)
             toasts.append({"achievement": achievement, "life": 3.5})
             new.append(achievement)
     return new
-
-
-def unlock_all(bp):
-    for achievement in ACHIEVEMENTS:
-        if achievement["key"] not in bp["achievements"]:
-            bp["achievements"].append(achievement["key"])
 
 
 def update(dt):
@@ -78,8 +69,7 @@ def draw_toasts(screen):
         panel(screen, (W / 2 - 180, y, 360, 64), YELLOW)
         text_center(screen, "Achievement: " + achievement["name"], 26, YELLOW, y + 10)
         line = achievement["desc"]
-        if achievement["gems"]:
-            line += f" (+{achievement['gems']} gems)"
+        line += f" (+{achievement['coins']} coins)"
         text_center(screen, line, 22, (230, 230, 230), y + 38)
 
 
@@ -92,7 +82,7 @@ def handle_input(state, events):
 def draw_screen(screen, state):
     bp = state["bp"]
     draw_background(screen, state, 190)
-    done = len(bp["achievements"])
+    done = len([a for a in ACHIEVEMENTS if a["key"] in bp["achievements"]])
     text_center(screen, "Achievements", 64, YELLOW, 20)
     text_center(screen, f"{done} / {len(ACHIEVEMENTS)} gehaald", 26, GREY, 74)
     for i, achievement in enumerate(ACHIEVEMENTS):
@@ -103,10 +93,9 @@ def draw_screen(screen, state):
         color = (255, 255, 255) if unlocked else (130, 130, 140)
         screen.blit(sprites.font(26).render(achievement["name"], True, color), (x + 12, y + 6))
         screen.blit(sprites.font(20).render(achievement["desc"], True, GREY if unlocked else (110, 110, 120)), (x + 12, y + 28))
-        if achievement["gems"]:
-            gems = sprites.font(22).render(f"{achievement['gems']}", True, (230, 120, 230))
-            screen.blit(gems, (x + 380 - gems.get_width(), y + 16))
-            screen.blit(sprites.scaled(sprites.get("gem_premium"), 0.6), (x + 384, y + 16))
+        coins = sprites.font(22).render(f"{achievement['coins']}", True, (240, 200, 60))
+        screen.blit(coins, (x + 380 - coins.get_width(), y + 16))
+        screen.blit(sprites.scaled(sprites.get("coin"), 0.6), (x + 384, y + 16))
     text_center(screen, "Esc: terug", 24, GREY, 560)
 
 

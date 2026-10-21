@@ -1104,23 +1104,6 @@ POTION = [
     "..oooooo..",
 ]
 
-BOTJE_0 = [
-    ".....oo.....",
-    ".....oYo....",
-    "......o.....",
-    "..oooooooo..",
-    ".oMMMMMMMMo.",
-    ".oMSSSSSSMo.",
-    ".oMSESSESMo.",
-    ".oMSSSSSSMo.",
-    ".oMSSWWSSMo.",
-    ".oMMMMMMMMo.",
-    "..oooooooo..",
-    "...oMMMMo...",
-    "..oMMBBMMo..",
-    "...oooooo...",
-]
-BOTJE_1 = BOTJE_0[:1] + [".....oRo...."] + BOTJE_0[2:8] + [".oMSWSSWSMo."] + BOTJE_0[9:]
 
 CAT = [
     "...oo......oo...",
@@ -1207,16 +1190,6 @@ def make_extra():
     save_grid(SNOWFLAKE, {"W": (200, 235, 255)}, "items", "freeze", 3)
     save_grid(BOOTS, {"B": (220, 60, 60), "D": (120, 30, 30), "W": (240, 240, 250), "Y": (255, 220, 80)}, "items", "boots", 3)
     save_grid(POTION, {"C": (150, 100, 50), "W": (230, 250, 230), "P": (120, 230, 120), "D": (60, 160, 80)}, "items", "potion", 3)
-    save_grid(GEM, {"L": (255, 200, 255), "B": (230, 80, 220), "D": (140, 30, 150)}, "items", "gem_premium", 4)
-    save_grid(CHEST, {"B": (120, 60, 170), "D": (70, 35, 110), "Y": (255, 215, 60)}, "items", "lootbox", 4)
-
-    botje = {"M": (170, 180, 200), "S": (40, 60, 80), "E": (100, 240, 255), "W": (100, 240, 255), "Y": (255, 230, 80), "R": (255, 80, 80), "B": (80, 240, 255)}
-    save_grid(BOTJE_0, botje, "players", "botje_0", 3)
-    save_grid(BOTJE_1, botje, "players", "botje_1", 3)
-
-    pet = {"G": (250, 140, 200), "H": (255, 220, 240), "E": DARK, "M": (150, 50, 100), "D": (210, 90, 160)}
-    save_grid(SLIME_0, pet, "players", "pet_0", 2)
-    save_grid(SLIME_1, pet, "players", "pet_1", 2)
 
 
 def main():

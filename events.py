@@ -2,8 +2,6 @@ import random
 
 import pygame
 
-import assistant
-import dev
 import effects
 from enemy import spawn_kind
 from settings import W, H, EVENT_FIRST, EVENT_INTERVAL, MAX_ENEMIES
@@ -14,7 +12,6 @@ EVENTS = {
     "meteors": {"name": "Meteorenregen!", "desc": "Kijk omhoog", "time": 20, "color": (255, 120, 50)},
     "blood_moon": {"name": "Bloedmaan", "desc": "Snellere vijanden, dubbele XP", "time": 40, "color": (230, 40, 50)},
     "slime_rain": {"name": "Slijmregen", "desc": "Waar komen die vandaan?", "time": 3, "color": (90, 200, 80)},
-    "gem_rain": {"name": "Gem regen", "desc": "+5 gems, gratis!", "time": 3, "color": (230, 80, 220)},
 }
 
 
@@ -34,15 +31,11 @@ def start(state, key=None):
     state["event_time"] = info["time"]
     effects.announce(info["name"], info["color"], 60)
     effects.add_text(state["player"].pos + (0, -60), info["desc"], info["color"], 28)
-    assistant.say("event", force=True)
     player = state["player"]
     if key == "slime_rain":
         for _ in range(15):
             if len(state["enemies"]) < MAX_ENEMIES:
                 state["enemies"].append(spawn_kind("walker", player.pos, state["time"], state["difficulty"], state["world"]))
-    elif key == "gem_rain":
-        state["bp"]["gems"] += 5
-        state["stats"]["gems"] = state["stats"].get("gems", 0) + 5
     return info["name"]
 
 
@@ -69,7 +62,7 @@ def update(state, dt):
         if meteor["timer"] <= 0 and not meteor["landed"]:
             meteor["landed"] = True
             land(meteor["pos"], 60, 10, player, state["enemies"])
-            if player.pos.distance_to(meteor["pos"]) < 60 and not dev.god:
+            if player.pos.distance_to(meteor["pos"]) < 60:
                 player.take_damage(1)
     state["event_meteors"] = [m for m in state["event_meteors"] if m["timer"] > -0.2]
 

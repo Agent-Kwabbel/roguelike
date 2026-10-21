@@ -27,7 +27,6 @@ from settings import (
     POTION_TIME,
     STREAK_TIME,
     STREAK_TEXTS,
-    REVIVE_COST,
     DAY_LENGTH,
     NIGHT_DARKNESS,
 )
@@ -38,17 +37,12 @@ from pickup import Pickup, random_drop
 from upgrades import pick_choices
 from world import World
 from menus import init_menu, init_slots, format_time, text_center, panel, wrap_text
-from pet import Pet
 import achievements
-import assistant
-import battlepass
-import challenges
 import config
-import dev
 import effects
 import events
-import gemstore
 import menus
+import progress
 import saves
 import settings_menu
 import sprites
@@ -56,40 +50,25 @@ import ui
 
 SCREENS = {}
 SCREENS.update(menus.SCREENS)
-SCREENS.update(gemstore.SCREENS)
 SCREENS.update(achievements.SCREENS)
 
 # deze vijanden lopen om naar de deur als je binnen bent
 PATH_AI = ("chase", "dasher", "zigzag", "exploder", "mimic")
 # hier staat linksboven een terug knop
-BACK_SCREENS = ("battlepass", "challenges", "shop", "gemstore", "achievements")
+BACK_SCREENS = ("shop", "achievements")
 PAUSE_BUTTONS = ["Verder spelen", "Instellingen", "Opslaan en naar menu", "Run opgeven"]
 
 
-def init_game(difficulty_key, bp, world, resume=None):
-    """Maak de beginstaat van het spel aan. Met resume gaat een opgeslagen run verder."""
+def init_game(difficulty_key, bp, world):
+    """Maak de beginstaat van het spel aan."""
     difficulty = DIFFICULTIES[difficulty_key]
     player = Player(
         difficulty["player_hp"],
-        battlepass.skin_sprite(bp),
-        battlepass.bullet_sprite(bp),
+        progress.skin_sprite(bp),
+        progress.bullet_sprite(bp),
     )
-    battlepass.apply_perks(bp, player)
+    progress.apply_perks(bp, player)
     effects.clear()
-    if resume:
-        # de boosters zijn bij het begin van de run al gebruikt
-        boost_xp = resume["boost_xp"]
-        boost_coins = resume["boost_coins"]
-    else:
-        boost_xp = bp["boosters"]["xp"] > 0
-        boost_coins = bp["boosters"]["coins"] > 0
-        if boost_xp:
-            bp["boosters"]["xp"] -= 1
-            player.xp_mult *= 2
-        if boost_coins:
-            bp["boosters"]["coins"] -= 1
-        battlepass.save(bp)
-    assistant.say("start", force=True)
     state = {
         "running": True,
         "screen": "game",
@@ -115,14 +94,10 @@ def init_game(difficulty_key, bp, world, resume=None):
         "world": world,
         "bp": bp,
         "stats": {"kills": 0, "bosses": 0, "elites": 0, "pickups": 0, "chests": 0, "coins": 0,
-                  "best_streak": 0, "revived": False},
-        "pet": Pet(player.pos) if bp["pet"] else None,
+                  "best_streak": 0},
         "freeze": 0,
         "streak": 0,
         "streak_timer": 0,
-        "revive_prompt": False,
-        "boost_xp": boost_xp,
-        "boost_coins": boost_coins,
         "achievement_timer": 2,
     }
     events.init(state)
@@ -135,7 +110,7 @@ def continue_run(state):
         state["run_info"] = None
         state["continue"] = False
         return state
-    new_state = init_game(data["difficulty_key"], state["bp"], World(data["seed"]), resume=data)
+    new_state = init_game(data["difficulty_key"], state["bp"], World(data["seed"]))
     saves.apply_run(new_state, data)
     return new_state
 
@@ -143,7 +118,7 @@ def continue_run(state):
 def quit_game(state):
     # een lopende run wordt bewaard, behalve als je al dood bent
     if state["screen"] == "game":
-        if state["revive_prompt"] or state["player"].hp <= 0:
+        if state["player"].hp <= 0:
             end_run(state)
         else:
             saves.save_run(state)
@@ -156,27 +131,15 @@ def handle_input(state):
         if event.type == pygame.QUIT:
             quit_game(state)
             return state
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_h:
-            assistant.toggle()
         if event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
             config.toggle_fullscreen()
         if event.type == pygame.WINDOWFOCUSLOST and state["screen"] == "game":
-            if not state["choices"] and not state["revive_prompt"]:
+            if not state["choices"]:
                 state["paused"] = True
                 state["pause_page"] = "main"
 
-    # zonder save kan het dev menu niks
-    if state["bp"] is not None and dev.handle_input(state, events):
-        if state["screen"] == "game":
-            state["player"].move = pygame.Vector2(0, 0)
-        return state
-
-    if state["screen"] == "menu" and state["popup"]:
-        gemstore.handle_popup(state, events)
-        return state
-
     if state["screen"] in SCREENS:
-        if state["screen"] in BACK_SCREENS and ui.back_clicked(events) and not gem_overlay(state):
+        if state["screen"] in BACK_SCREENS and ui.back_clicked(events):
             state["screen"] = "menu"
             return state
         handle_screen = SCREENS[state["screen"]][0]
@@ -188,7 +151,7 @@ def handle_input(state):
             return continue_run(state)
         return state
 
-    if state["paused"] and not state["revive_prompt"]:
+    if state["paused"]:
         state["player"].move = pygame.Vector2(0, 0)
         return handle_pause(state, events)
     if state["choices"]:
@@ -200,13 +163,7 @@ def handle_input(state):
     for event in events:
         if event.type != pygame.KEYDOWN:
             continue
-        if state["revive_prompt"]:
-            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                revive(state)
-            elif event.key in (pygame.K_ESCAPE, pygame.K_q):
-                state["revive_prompt"] = False
-                state["quit_run"] = True
-        elif state["choices"]:
+        if state["choices"]:
             keys = [pygame.K_1, pygame.K_2, pygame.K_3]
             if event.key in keys:
                 index = keys.index(event.key)
@@ -221,11 +178,6 @@ def handle_input(state):
             state["player"].dash()
     state["player"].read_input()
     return state
-
-
-def gem_overlay(state):
-    # tijdens betalen, reclame of een lootbox kan je niet weg
-    return state.get("gem_pay") or state.get("gem_ad") or state.get("gem_box")
 
 
 def handle_pause(state, events):
@@ -268,35 +220,14 @@ def handle_pause(state, events):
     return state
 
 
-def revive(state):
-    bp = state["bp"]
-    player = state["player"]
-    bp["gems"] -= REVIVE_COST
-    battlepass.save(bp)
-    state["revive_prompt"] = False
-    state["stats"]["revived"] = True
-    player.hp = player.max_hp
-    player.invis_timer = 3
-    # alles in de buurt wegblazen zodat je niet meteen weer dood gaat
-    for enemy in state["enemies"]:
-        if enemy.kind != "boss" and player.pos.distance_to(enemy.pos) < 300:
-            enemy.hurt(enemy.hp)
-    state["flash"] = 0.3
-    effects.announce("TERUG VAN WEGGEWEEST", (230, 120, 230), 54)
-
-
 def update(state, dt):
     achievements.update(dt)
-    assistant.update(dt)
     if state["screen"] != "game":
         state["menu_time"] += dt
-        gemstore.update(state, dt)
-        if state["screen"] == "menu":
-            assistant.say("menu", chance=0.01)
         return state
     if state["quit_run"]:
         return end_run(state)
-    if state["choices"] or state["paused"] or dev.is_open or state["revive_prompt"]:
+    if state["choices"] or state["paused"]:
         return state
 
     player = state["player"]
@@ -322,13 +253,10 @@ def update(state, dt):
         state["enemies"].append(spawn_boss(player.pos, state["time"], difficulty, world))
         effects.add_text(player.pos + (0, -70), "Een baas komt eraan!", (240, 70, 70), 40)
         effects.announce("BAAS!", (240, 70, 70), 80)
-        assistant.say("boss", force=True)
 
     events.update(state, dt)
     state["bullets"] += player.update_weapons(dt, state["enemies"])
     update_enemies(state, dt)
-    if state["pet"]:
-        state["pet"].update(dt, player, state["orbs"])
     pickups, orbs = world.update(dt, player.pos)
     state["pickups"] += pickups
     state["orbs"] += orbs
@@ -346,7 +274,6 @@ def update(state, dt):
         state["streak"] = 0
 
     handle_collisions(state)
-    assistant_hints(state)
 
     state["achievement_timer"] -= dt
     if state["achievement_timer"] <= 0:
@@ -356,12 +283,8 @@ def update(state, dt):
     if player.pending_upgrades > 0:
         player.pending_upgrades -= 1
         state["choices"] = pick_choices(player)
-        assistant.say("level_up", chance=0.4)
 
     if player.hp <= 0:
-        if not state["stats"]["revived"] and state["bp"]["gems"] >= REVIVE_COST:
-            state["revive_prompt"] = True
-            return state
         return end_run(state)
     return state
 
@@ -394,16 +317,6 @@ def update_enemies(state, dt):
     state["enemies"] += spawned[:max(0, room)]
 
 
-def assistant_hints(state):
-    player = state["player"]
-    if player.hp <= 1:
-        assistant.say("low_hp", chance=0.02)
-    if len(state["enemies"]) > 80:
-        assistant.say("crowd", chance=0.005)
-    if player.still_time > 6:
-        assistant.say("idle", chance=0.01)
-
-
 def run_stats(state):
     stats = state["stats"]
     stats["time"] = state["time"]
@@ -423,18 +336,11 @@ def end_run(state):
         stats["hard_time"] = state["time"]
 
     coins = stats["kills"] // COINS_PER_KILLS + stats["coins"]
-    if state["boost_coins"]:
-        coins *= 2
     bp["coins"] += coins
     for key in ("kills", "elites", "runs"):
         bp["totals"][key] = bp["totals"].get(key, 0) + stats.get(key, 0)
-    achievements.check(stats, bp)
-    if player.hp <= 0:
-        assistant.say("death", force=True)
-    bp_xp = battlepass.run_xp(state["time"], stats["kills"], player.level)
-    challenge_xp, finished = challenges.update(bp, stats)
-    new_tiers = battlepass.add_xp(bp, bp_xp + challenge_xp)
-    battlepass.save(bp)
+    new = achievements.check(stats, bp)
+    progress.save(bp)
     saves.delete_run()
     last_run = {
         "difficulty": state["difficulty"]["name"],
@@ -442,10 +348,7 @@ def end_run(state):
         "level": player.level,
         "kills": stats["kills"],
         "coins": coins,
-        "bp_xp": bp_xp + challenge_xp,
-        "new_tiers": new_tiers,
-        "tier": battlepass.current_tier(bp),
-        "finished": finished,
+        "achievements": [a["name"] for a in new],
     }
     return init_menu(bp, state["world"], last_run)
 
@@ -463,8 +366,6 @@ def bullet_hits(state):
 
 
 def enemy_hits(state):
-    if dev.god:
-        return
     player = state["player"]
     damage = state["difficulty"]["enemy_damage"]
     for enemy in state["enemies"]:
@@ -515,8 +416,6 @@ def use_pickup(state, kind):
     elif kind == "potion":
         player.potion_timer = POTION_TIME
         effects.add_text(player.pos + (0, -30), "Dubbele XP!", (120, 230, 120), 28)
-    if kind != "coin":
-        assistant.say("pickup", chance=0.3)
 
 
 def collect(state):
@@ -537,7 +436,7 @@ def explode(state, enemy):
     effects.shake(10)
     state["flash"] = max(state["flash"], 0.1)
     player = state["player"]
-    if not dev.god and player.pos.distance_to(enemy.pos) < EXPLODE_RADIUS:
+    if player.pos.distance_to(enemy.pos) < EXPLODE_RADIUS:
         player.take_damage(state["difficulty"]["enemy_damage"])
     # andere vijanden krijgen ook wat
     for other in state["enemies"]:
@@ -553,8 +452,6 @@ def add_streak(state):
     if state["streak"] in STREAK_TEXTS:
         effects.announce(STREAK_TEXTS[state["streak"]])
         effects.shake(min(12, 2 + state["streak"] / 10))
-        if state["streak"] >= 25:
-            assistant.say("streak", chance=0.5)
 
 
 def enemy_deaths(state):
@@ -695,10 +592,6 @@ def draw_status(screen, state):
         lines.append((f"Snelle schoenen {player.boots_timer:.0f}s", (255, 220, 80)))
     if player.potion_timer > 0:
         lines.append((f"Dubbele XP {player.potion_timer:.0f}s", (120, 230, 120)))
-    if state["boost_xp"]:
-        lines.append(("Booster: dubbele XP", (230, 120, 230)))
-    if state["boost_coins"]:
-        lines.append(("Booster: dubbele coins", (230, 120, 230)))
     if player.can_dash:
         if player.dash_cooldown > 0:
             lines.append((f"Dash {player.dash_cooldown:.1f}s", GREY_TEXT))
@@ -729,16 +622,6 @@ def draw_night(screen, state, camera):
     screen.blit(overlay, (0, 0))
 
 
-def draw_revive(screen, state):
-    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-    overlay.fill((40, 0, 0, 190))
-    screen.blit(overlay, (0, 0))
-    text_center(screen, "Je bent dood!", 72, (240, 80, 80), 170)
-    text_center(screen, f"Doorgaan voor {REVIVE_COST} gems?", 44, (230, 120, 230), 260)
-    text_center(screen, f"Je hebt {state['bp']['gems']} gems", 28, (200, 200, 200), 310)
-    text_center(screen, "Enter: ja graag, Esc: nee, laat me maar dood", 28, (200, 200, 200), 380)
-
-
 def pause_rects():
     return [pygame.Rect(W / 2 - 180, 250 + i * 62, 360, 52) for i in range(len(PAUSE_BUTTONS))]
 
@@ -757,7 +640,7 @@ def draw_pause(screen, state):
         ui.button(screen, rect, PAUSE_BUTTONS[i], i == state["pause_selected"], accents[i])
     text_center(screen, "Esc: verder spelen", 22, ui.GREY, 545)
     if state["pause_page"] == "confirm":
-        ui.draw_confirm(screen, "Run opgeven?", "Je krijgt wel je coins en BP XP", state["confirm_selected"])
+        ui.draw_confirm(screen, "Run opgeven?", "Je krijgt wel je coins", state["confirm_selected"])
 
 
 def draw_game(screen, state):
@@ -772,8 +655,6 @@ def draw_game(screen, state):
         enemy.draw(screen, camera, frozen)
     for bullet in state["bullets"]:
         bullet.draw(screen, camera)
-    if state["pet"]:
-        state["pet"].draw(screen, camera)
     state["player"].draw(screen, camera)
     for bullet in state["enemy_bullets"]:
         bullet.draw(screen, camera)
@@ -795,9 +676,7 @@ def draw_game(screen, state):
     draw_time(screen, state)
     draw_boss_bar(screen, state["enemies"])
     draw_status(screen, state)
-    if state["revive_prompt"]:
-        draw_revive(screen, state)
-    elif state["choices"]:
+    if state["choices"]:
         draw_upgrade_menu(screen, state["choices"])
     elif state["paused"]:
         draw_pause(screen, state)
@@ -807,18 +686,11 @@ def draw(screen, state):
     if state["screen"] in SCREENS:
         draw_screen = SCREENS[state["screen"]][1]
         draw_screen(screen, state)
-        if state["screen"] == "menu" and state["popup"]:
-            gemstore.draw_popup(screen, state)
-        if state["screen"] in BACK_SCREENS and not gem_overlay(state):
+        if state["screen"] in BACK_SCREENS:
             ui.back_button(screen)
     else:
         draw_game(screen, state)
-    # in de andere menus staat hij in de weg
-    if state["screen"] in ("menu", "game"):
-        assistant.draw(screen)
     achievements.draw_toasts(screen)
-    if state["bp"] is not None:
-        dev.draw(screen, state)
     if config.get("show_fps"):
         text = sprites.font(22).render(f"{fps:.0f} FPS", True, (200, 255, 200))
         screen.blit(text, (W - text.get_width() - 10, H - 34))
@@ -841,7 +713,7 @@ def main():
     last_slot = config.get("last_slot")
     if last_slot and saves.slot_info(last_slot):
         saves.slot = last_slot
-        state = init_menu(battlepass.load(), World())
+        state = init_menu(progress.load(), World())
     else:
         state = init_slots(World())
     while state["running"]:

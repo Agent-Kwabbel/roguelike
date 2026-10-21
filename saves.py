@@ -71,7 +71,7 @@ def slot_info(n):
     return {
         "xp": data.get("xp", 0),
         "coins": data.get("coins", 0),
-        "gems": data.get("gems", 0),
+        "achievements": len(data.get("achievements", [])),
         "runs": data.get("totals", {}).get("runs", 0),
         "last_played": data.get("last_played", "?"),
         "run": run_summary(run),
@@ -104,7 +104,7 @@ def delete_run():
 
 
 STATE_KEYS = ("difficulty_key", "time", "spawn_timer", "next_boss", "stats", "freeze", "streak",
-              "boost_xp", "boost_coins", "event", "event_time", "next_event")
+              "event", "event_time", "next_event")
 
 
 def save_run(state):
@@ -185,5 +185,3 @@ def apply_run(state, data):
     for key in data["looted"]:
         state["world"].looted.add(tuple(key))
     state["camera"] = player.pos - pygame.Vector2(W / 2, H / 2)
-    if state["pet"]:
-        state["pet"].pos = player.pos + (30, 0)
