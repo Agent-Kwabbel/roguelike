@@ -139,7 +139,7 @@ class Building:
             if amount < 1:
                 count = 1 if random.random() < amount else 0
             else:
-                count = random.randint(1, amount)
+                count = random.randint(1, int(amount))
             for _ in range(count):
                 if kind == "gems":
                     orbs.append(Orb(self.random_spot(), 3))

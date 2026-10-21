@@ -905,6 +905,320 @@ def bolt_palette(white, light, color):
     return {"W": white, "L": light, "C": color}
 
 
+# ---------- nieuwe vijanden, wapens en winkel spullen ----------
+
+GHOST_BODY = [
+    "................",
+    ".....oooooo.....",
+    "....oWWWWWWo....",
+    "...oWWWWWWWWo...",
+    "..oWWWWWWWWWWo..",
+    "..oWWEEWWEEWWo..",
+    "..oWWEEWWEEWWo..",
+    "..oWWWWWWWWWWo..",
+    "..oWWWWMMWWWWo..",
+    "..oWWWWMMWWWWo..",
+    "..oWWWWWWWWWWo..",
+]
+GHOST_TAIL_A = [
+    "..oWLWWWWWWLWo..",
+    "..oLWoWLLWoWLo..",
+    "..oo.o.oo.o.oo..",
+]
+GHOST_TAIL_B = [
+    "..oWLWWWWWWLWo..",
+    "..oWLoWLLWoLWo..",
+    "..o.oo.oo.oo.o..",
+]
+
+BOMBER = [
+    "..........oY....",
+    ".........oYo....",
+    "........oo......",
+    ".....ooooooo....",
+    "....oKKKKKKKo...",
+    "...oKWKKKKKKKo..",
+    "..oKWKKKKKKKKKo.",
+    "..oKKKEKKKEKKKo.",
+    "..oKKKEKKKEKKKo.",
+    "..oKKKKKKKKKKKo.",
+    "..oKKKRRRRRKKKo.",
+    "...oKKKKKKKKKo..",
+    "....oDDDDDDDo...",
+]
+BOMBER_LEGS_A = [
+    "....oFo..oFo....",
+    "....ooo..ooo....",
+    "................",
+]
+BOMBER_LEGS_B = [
+    "...oFo....oFo...",
+    "...ooo....ooo...",
+    "................",
+]
+
+SPIDER_0 = [
+    "................",
+    "o..o........o..o",
+    ".o..o......o..o.",
+    "..o..oooooo..o..",
+    "...ooBBBBBBoo...",
+    "oooBBBBBBBBBBooo",
+    "...oBBEBBEBBo...",
+    "..ooBBBBBBBBoo..",
+    ".o..oBBRRBBo..o.",
+    "o..o..oooo..o..o",
+    "...o........o...",
+    "................",
+]
+SPIDER_1 = [
+    "................",
+    "................",
+    "o..o........o..o",
+    ".o.o.oooooo.o.o.",
+    "..oooBBBBBBooo..",
+    "oooBBBBBBBBBBooo",
+    "...oBBEBBEBBo...",
+    "..ooBBBBBBBBoo..",
+    "..o.oBBRRBBo.o..",
+    ".o..o.oooo.o..o.",
+    "o..o........o..o",
+    "................",
+]
+
+MIMIC_0 = [
+    "................",
+    "..oooooooooooo..",
+    ".oBBBBBBBBBBBBo.",
+    ".oBDBBBBBBBBDBo.",
+    ".oooooooooooooo.",
+    ".oRWRWRWRWRWRRo.",
+    ".oRRRRERRERRRRo.",
+    ".oRRRRRRRRRRRRo.",
+    ".oRWRWRWRWRWRRo.",
+    ".ooooooYYoooooo.",
+    ".oBBBBBYYBBBBBo.",
+    ".oBDBBBBBBBBDBo.",
+    ".oDDDDDDDDDDDDo.",
+    "..oooooooooooo..",
+]
+MIMIC_1 = MIMIC_0[:5] + [
+    ".oWRWRWRWRWRWRo.",
+    ".oRRRRERRERRRRo.",
+    ".oRRRRRRRRRRRRo.",
+    ".oWRWRWRWRWRWRo.",
+] + MIMIC_0[9:]
+
+CROWN = [
+    "....oYoYYoYo....",
+    "....oYYYYYYo....",
+    "....oooooooo....",
+]
+
+BOOMERANG = [
+    "oo........",
+    "oBo.......",
+    "oBBo......",
+    ".oBBo.....",
+    "..oBBo....",
+    "..oBBBoooo",
+    "...oBBBBWo",
+    "....ooooo.",
+]
+
+METEOR = [
+    "...oooo...",
+    "..oRRRRo..",
+    ".oRYYRRRo.",
+    "oRYWYRRRDo",
+    "oRYYRRRDDo",
+    "oRRRRRDDDo",
+    "oRRRDDDDDo",
+    ".oRDDDDDo.",
+    "..oDDDDo..",
+    "...oooo...",
+]
+
+FLAME_0 = [
+    "...o....",
+    "..oRo...",
+    "..oRRo..",
+    ".oRYRo..",
+    ".oRYYRo.",
+    "oRYWYRo.",
+    "oRYWWYRo",
+    "oRYWWYRo",
+    ".oRYYRo.",
+    "..oooo..",
+]
+FLAME_1 = [
+    "....o...",
+    "...oRo..",
+    "..oRRo..",
+    "..oRYRo.",
+    ".oRYYRo.",
+    ".oRYWYRo",
+    "oRYWWYRo",
+    "oRYWWYRo",
+    ".oRYYRo.",
+    "..oooo..",
+]
+
+SNOWFLAKE = [
+    "....oo....",
+    ".o.oWWo.o.",
+    "oWooWWooWo",
+    ".oWoWWoWo.",
+    "ooooWWoooo",
+    "oWWWWWWWWo",
+    "ooooWWoooo",
+    ".oWoWWoWo.",
+    "oWooWWooWo",
+    ".o.oWWo.o.",
+    "....oo....",
+]
+
+BOOTS = [
+    "..oooo....",
+    "..oBBo....",
+    "..oBBo.oo.",
+    "..oBBoWWYo",
+    "..oBBo.oo.",
+    "..oBBBooo.",
+    ".oBBBBBBBo",
+    ".oDDDDDDDo",
+    "..ooooooo.",
+]
+
+POTION = [
+    "...oooo...",
+    "...oCCo...",
+    "....oo....",
+    "...oWWo...",
+    "..oWPPWo..",
+    ".oPPWPPPo.",
+    "oPPWPPPPPo",
+    "oPPPPPPPDo",
+    "oPPPPPPDDo",
+    ".oPPPPDDo.",
+    "..oooooo..",
+]
+
+BOTJE_0 = [
+    ".....oo.....",
+    ".....oYo....",
+    "......o.....",
+    "..oooooooo..",
+    ".oMMMMMMMMo.",
+    ".oMSSSSSSMo.",
+    ".oMSESSESMo.",
+    ".oMSSSSSSMo.",
+    ".oMSSWWSSMo.",
+    ".oMMMMMMMMo.",
+    "..oooooooo..",
+    "...oMMMMo...",
+    "..oMMBBMMo..",
+    "...oooooo...",
+]
+BOTJE_1 = BOTJE_0[:1] + [".....oRo...."] + BOTJE_0[2:8] + [".oMSWSSWSMo."] + BOTJE_0[9:]
+
+CAT = [
+    "...oo......oo...",
+    "...oHo....oHo...",
+    "...oHHooooHHo...",
+    "...oHHHHHHHHo...",
+    "...oHHHHHHHHo...",
+    "...oHEHHHHEHo...",
+    "...oHHHPPHHHo...",
+    "....oHWWWWHo....",
+    "...ooBBBBBBoo...",
+    "..oHoBBAABBoHo..",
+    "..oHoBBAABBoHo..",
+    "..ooBBBBBBBBoo..",
+    "...ooBBBBBBoo...",
+]
+
+DINO = [
+    "......oo........",
+    ".....oAAo.......",
+    "....oHHHHooooo..",
+    "...oHHHHHHHHHHo.",
+    "...oHHHHHEHHHHo.",
+    "..oAoHHHHHHHHHo.",
+    "...oHHHHHWWWWWo.",
+    "....oHHHHHooooo.",
+    "...ooHHHHHHoo...",
+    "..oHoHHWWHHoHo..",
+    "..oHoHHWWHHoHo..",
+    "..ooHHHHHHHHoo..",
+    "...ooHHHHHHoo...",
+]
+
+GEM_SKINS = {
+    "skin_banana": (HERO, hero_palette((250, 220, 60), (255, 245, 150), (120, 90, 30), (240, 200, 50), (250, 230, 90))),
+    "skin_clown": (HERO, hero_palette((230, 60, 160), (80, 200, 250), (250, 80, 40), (60, 180, 80), (250, 240, 240))),
+    "skin_whale": (HERO, hero_palette((70, 110, 170), (200, 220, 240), (70, 110, 170), (50, 80, 130), (120, 160, 210))),
+    "skin_cat": (CAT, {"H": (240, 150, 60), "E": (60, 200, 80), "P": (250, 150, 170), "W": (250, 240, 230), "B": (80, 80, 160), "A": (250, 240, 230), "L": (200, 110, 40)}),
+    "skin_dino": (DINO, {"H": (90, 190, 80), "A": (240, 200, 60), "E": DARK, "W": (230, 240, 200), "L": (60, 140, 60)}),
+}
+
+
+def make_extra():
+    for name, (body, palette) in GEM_SKINS.items():
+        save_frames(body, LEGS_A, LEGS_B, palette, "players", name, 3)
+
+    ghost = {"W": (230, 235, 255), "L": (170, 180, 220), "E": DARK, "M": (60, 60, 90)}
+    save_grid(GHOST_BODY + GHOST_TAIL_A, ghost, "enemies", "ghost_0", 3)
+    save_grid(GHOST_BODY[1:] + GHOST_TAIL_B + ["................"], ghost, "enemies", "ghost_1", 3)
+
+    bomber = {"K": (55, 55, 70), "W": (150, 150, 170), "E": (255, 80, 60), "R": (200, 40, 40), "D": (35, 35, 45), "Y": (255, 200, 50), "F": (255, 140, 40)}
+    save_frames(BOMBER, BOMBER_LEGS_A, BOMBER_LEGS_B, bomber, "enemies", "bomber", 3)
+
+    necro = {"H": (50, 30, 70), "S": (170, 190, 170), "E": (255, 60, 60), "B": (70, 40, 90), "A": (120, 240, 120), "L": (40, 25, 50)}
+    save_frames(HOOD, LEGS_A, LEGS_B, necro, "enemies", "necro", 3)
+
+    skeleton = hero_palette((215, 215, 200), (120, 120, 110), (235, 235, 220), (180, 180, 165), (235, 235, 220))
+    skeleton["E"] = (255, 60, 60)
+    save_frames(HERO, LEGS_A, LEGS_B, skeleton, "enemies", "skeleton", 3)
+
+    shaman = {"H": (60, 140, 70), "A": (120, 255, 140), "S": (200, 160, 110), "E": DARK, "W": (240, 230, 200), "B": (90, 70, 40), "L": (60, 45, 30)}
+    save_frames(WIZARD, LEGS_A, LEGS_B, shaman, "enemies", "shaman", 3)
+
+    spider = {"B": (50, 40, 50), "E": (255, 60, 60), "R": (180, 30, 60)}
+    save_grid(SPIDER_0, spider, "enemies", "spider_0", 3)
+    save_grid(SPIDER_1, spider, "enemies", "spider_1", 3)
+
+    mimic = {"B": (160, 100, 50), "D": (110, 65, 35), "Y": (245, 200, 60), "R": (120, 20, 30), "W": (245, 245, 230), "E": (255, 220, 60)}
+    save_grid(MIMIC_0, mimic, "enemies", "mimic_0", 3)
+    save_grid(MIMIC_1, mimic, "enemies", "mimic_1", 3)
+
+    king = {"G": (80, 140, 230), "H": (180, 210, 255), "E": DARK, "M": (30, 50, 110), "D": (50, 90, 180), "Y": (255, 215, 60)}
+    save_grid(CROWN + SLIME_0[3:], king, "enemies", "king_slime_0", 5)
+    save_grid(["................"] * 2 + CROWN + SLIME_1[5:], king, "enemies", "king_slime_1", 5)
+
+    save_grid(BOOMERANG, {"B": (200, 130, 60), "W": (250, 220, 150)}, "projectiles", "boomerang", 3)
+    save_grid(METEOR, {"R": (200, 70, 40), "Y": (255, 180, 60), "W": (255, 250, 200), "D": (110, 50, 40)}, "projectiles", "meteor", 3)
+    flame = {"R": (220, 60, 30), "Y": (255, 170, 40), "W": (255, 240, 180)}
+    save_grid(FLAME_0, flame, "projectiles", "fire_0", 3)
+    save_grid(FLAME_1, flame, "projectiles", "fire_1", 3)
+    save_grid(BOLT, bolt_palette((255, 255, 255), (255, 120, 220), (80, 160, 255)), "projectiles", "bullet_rainbow", 3)
+    save_grid(COIN, {"Y": (245, 200, 60), "W": (255, 250, 210), "D": (190, 140, 30)}, "projectiles", "bullet_coin", 2)
+
+    save_grid(SNOWFLAKE, {"W": (200, 235, 255)}, "items", "freeze", 3)
+    save_grid(BOOTS, {"B": (220, 60, 60), "D": (120, 30, 30), "W": (240, 240, 250), "Y": (255, 220, 80)}, "items", "boots", 3)
+    save_grid(POTION, {"C": (150, 100, 50), "W": (230, 250, 230), "P": (120, 230, 120), "D": (60, 160, 80)}, "items", "potion", 3)
+    save_grid(GEM, {"L": (255, 200, 255), "B": (230, 80, 220), "D": (140, 30, 150)}, "items", "gem_premium", 4)
+    save_grid(CHEST, {"B": (120, 60, 170), "D": (70, 35, 110), "Y": (255, 215, 60)}, "items", "lootbox", 4)
+
+    botje = {"M": (170, 180, 200), "S": (40, 60, 80), "E": (100, 240, 255), "W": (100, 240, 255), "Y": (255, 230, 80), "R": (255, 80, 80), "B": (80, 240, 255)}
+    save_grid(BOTJE_0, botje, "players", "botje_0", 3)
+    save_grid(BOTJE_1, botje, "players", "botje_1", 3)
+
+    pet = {"G": (250, 140, 200), "H": (255, 220, 240), "E": DARK, "M": (150, 50, 100), "D": (210, 90, 160)}
+    save_grid(SLIME_0, pet, "players", "pet_0", 2)
+    save_grid(SLIME_1, pet, "players", "pet_1", 2)
+
+
 def main():
     pygame.init()
 
@@ -987,6 +1301,8 @@ def main():
 
     for name, (rows, palette) in ICONS.items():
         save_grid(rows, palette, "icons", name, 3)
+
+    make_extra()
 
     print("sprites gemaakt in", os.path.abspath(ASSETS))
 

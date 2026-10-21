@@ -29,6 +29,18 @@ from settings import (
     ENEMY_BULLET_SPEED,
     ENEMY_BULLET_RADIUS,
     ENEMY_BULLET_LIFETIME,
+    GHOST_FADE_SPEED,
+    EXPLODE_RANGE,
+    EXPLODE_FUSE,
+    SUMMON_RANGE,
+    SUMMON_COOLDOWN,
+    SUMMON_COUNT,
+    ZIGZAG_WIDTH,
+    ZIGZAG_SPEED,
+    HEAL_COOLDOWN,
+    HEAL_RADIUS,
+    HEAL_AMOUNT,
+    MIMIC_WAKE,
 )
 
 
@@ -62,6 +74,14 @@ class Enemy:
         self.stuck_time = 0
         self.detour_time = 0
         self.detour_dir = pygame.Vector2(0, 0)
+        self.fuse = -1
+        self.exploded = False
+        self.spawned = []
+        self.summon_timer = SUMMON_COOLDOWN / 2
+        self.heal_timer = HEAL_COOLDOWN
+        self.heal_ready = False
+        self.heal_flash = 0
+        self.awake = self.ai != "mimic"
 
     def steer(self, target):
         """Als hij vastzit tegen water of een berg even opzij lopen."""
@@ -74,7 +94,7 @@ class Enemy:
             self.detour_time -= dt
             return
         # schutters en stormende zwijnen staan soms expres stil
-        if self.ai == "shooter" or self.dash_state != "walk":
+        if self.ai in ("shooter", "summoner", "healer", "ghost") or self.dash_state != "walk" or not self.awake:
             self.stuck_time = 0
             return
         moved = self.pos.distance_to(old_pos)
@@ -94,12 +114,14 @@ class Enemy:
     def hurt(self, amount, crit=False):
         self.hp -= amount
         self.flash = 0.1
+        self.awake = True
         effects.damage_text(self.pos, amount, crit)
 
     def update(self, dt, target):
         """Beweeg richting de speler, geeft een lijst met nieuwe vijandelijke kogels terug."""
         self.anim_time += dt
         self.flash = max(0, self.flash - dt)
+        self.heal_flash = max(0, self.heal_flash - dt)
         direction = target - self.pos
         distance = direction.length()
         if distance == 0:
@@ -111,6 +133,25 @@ class Enemy:
             return self.update_shooter(dt, direction, distance)
         if self.ai == "dasher":
             self.update_dasher(dt, direction, distance)
+            return []
+        if self.ai == "exploder":
+            self.update_exploder(dt, direction, distance)
+            return []
+        if self.ai == "summoner":
+            self.update_summoner(dt, direction, distance)
+            return []
+        if self.ai == "healer":
+            self.update_healer(dt, direction, distance)
+            return []
+        if self.ai == "mimic" and not self.awake:
+            self.facing_left = False
+            if distance < MIMIC_WAKE:
+                self.awake = True
+                effects.add_text(self.pos + (0, -30), "Het is een mimic!", (240, 80, 80), 26)
+            return []
+        if self.ai == "zigzag":
+            side = direction.rotate(90) * math.sin(self.anim_time * ZIGZAG_SPEED) * ZIGZAG_WIDTH
+            self.pos += (direction + side).normalize() * self.speed * dt
             return []
         self.pos += direction * self.speed * dt
         if self.ai == "boss":
@@ -147,6 +188,42 @@ class Enemy:
                 self.dash_state = "walk"
                 self.dash_timer = DASH_COOLDOWN
 
+    def update_exploder(self, dt, direction, distance):
+        if self.fuse < 0:
+            self.pos += direction * self.speed * dt
+            if distance < EXPLODE_RANGE:
+                self.fuse = EXPLODE_FUSE
+            return
+        self.pos += direction * self.speed * 0.3 * dt
+        self.fuse -= dt
+        if self.fuse <= 0:
+            self.exploded = True
+            self.hp = 0
+
+    def update_summoner(self, dt, direction, distance):
+        if distance > SUMMON_RANGE:
+            self.pos += direction * self.speed * dt
+        elif distance < SUMMON_RANGE - 100:
+            self.pos -= direction * self.speed * dt
+        self.summon_timer -= dt
+        if self.summon_timer <= 0 and distance < SUMMON_RANGE + 200:
+            self.summon_timer = SUMMON_COOLDOWN
+            for i in range(SUMMON_COUNT):
+                offset = pygame.Vector2(40, 0).rotate(i * 360 / SUMMON_COUNT)
+                self.spawned.append(Enemy("skeleton", self.pos + offset, self.minutes))
+            effects.burst(self.pos, (120, 240, 120), 12)
+
+    def update_healer(self, dt, direction, distance):
+        if distance > 220:
+            self.pos += direction * self.speed * dt
+        elif distance < 140:
+            self.pos -= direction * self.speed * dt
+        self.heal_timer -= dt
+        if self.heal_timer <= 0:
+            self.heal_timer = HEAL_COOLDOWN
+            self.heal_ready = True
+            self.heal_flash = 0.4
+
     def update_boss(self, dt):
         self.shoot_timer -= dt
         if self.shoot_timer > 0:
@@ -159,17 +236,27 @@ class Enemy:
             bullets.append(enemy_bullet(self.pos, direction, "enemy_orb"))
         return bullets
 
-    def draw(self, screen, camera):
+    def draw(self, screen, camera, frozen=False):
         image = sprites.frame(self.sprite, self.anim_time, 5)
+        if not self.awake:
+            image = sprites.get("chest")
         # sprites kijken naar rechts
         if self.facing_left:
             image = sprites.flipped(image)
         if self.elite:
             image = sprites.scaled(image, ELITE_SCALE)
-        if self.flash > 0:
+        if self.flash > 0 or (self.fuse >= 0 and int(self.fuse * 12) % 2 == 0):
             image = sprites.white(image)
+        elif frozen:
+            image = sprites.blue(image)
+        if self.ai == "ghost":
+            alpha = 0.45 + 0.35 * math.sin(self.anim_time * GHOST_FADE_SPEED)
+            image = sprites.faded(image, alpha)
 
         pos = self.pos - camera
+        if self.heal_flash > 0:
+            radius = HEAL_RADIUS * (1 - self.heal_flash / 0.4)
+            pygame.draw.circle(screen, (120, 255, 140), pos, radius, 3)
         if self.dash_state == "windup":
             pos += (random.uniform(-2, 2), 0)
         shadow_w = self.radius * 2
@@ -219,6 +306,20 @@ def spawn_enemy(player_pos, game_time=0, difficulty=None, world=None):
 
 def spawn_boss(player_pos, game_time, difficulty, world=None):
     return Enemy("boss", spawn_position(player_pos, world), game_time / 60, difficulty["enemy_hp"], 1)
+
+
+def heal_nearby(healer, enemies):
+    healer.heal_ready = False
+    for enemy in enemies:
+        if enemy is healer or enemy.hp <= 0 or enemy.hp >= enemy.max_hp:
+            continue
+        if healer.pos.distance_to(enemy.pos) < HEAL_RADIUS:
+            enemy.hp = min(enemy.max_hp, enemy.hp + HEAL_AMOUNT)
+            effects.add_text(enemy.pos + (0, -20), f"+{HEAL_AMOUNT}", (120, 255, 140), 20)
+
+
+def spawn_kind(kind, player_pos, game_time, difficulty, world=None):
+    return Enemy(kind, spawn_position(player_pos, world), game_time / 60, difficulty["enemy_hp"], difficulty["enemy_speed"])
 
 
 def split(enemy, kind, count):

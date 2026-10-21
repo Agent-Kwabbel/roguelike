@@ -80,7 +80,9 @@ DIFFICULTIES = {
 }
 
 # ai: chase loopt recht op je af, shooter houdt afstand en schiet,
-# dasher stormt op je af, boss schiet kogels in een ring
+# dasher stormt op je af, boss schiet kogels in een ring,
+# ghost gaat door muren, exploder ontploft, summoner roept skeletten op,
+# zigzag slingert, healer heelt andere vijanden, mimic doet alsof hij een kist is
 ENEMY_TYPES = {
     "walker": {"speed": 70, "radius": 16, "color": (90, 200, 80), "hp": 3, "xp": 1, "ai": "chase", "sprite": "slime"},
     "runner": {"speed": 140, "radius": 10, "color": (90, 50, 120), "hp": 1, "xp": 2, "ai": "chase", "sprite": "bat"},
@@ -90,6 +92,14 @@ ENEMY_TYPES = {
     "mini_blob": {"speed": 105, "radius": 10, "color": (170, 80, 200), "hp": 1, "xp": 1, "ai": "chase", "sprite": "mini_blob"},
     "boar": {"speed": 75, "radius": 16, "color": (130, 85, 55), "hp": 6, "xp": 3, "ai": "dasher", "sprite": "boar"},
     "boss": {"speed": 45, "radius": 38, "color": (180, 40, 50), "hp": 220, "xp": 40, "ai": "boss", "sprite": "boss"},
+    "ghost": {"speed": 80, "radius": 15, "color": (220, 225, 255), "hp": 3, "xp": 2, "ai": "ghost", "sprite": "ghost"},
+    "bomber": {"speed": 95, "radius": 15, "color": (255, 140, 40), "hp": 2, "xp": 2, "ai": "exploder", "sprite": "bomber"},
+    "necro": {"speed": 55, "radius": 15, "color": (120, 240, 120), "hp": 8, "xp": 6, "ai": "summoner", "sprite": "necro"},
+    "skeleton": {"speed": 90, "radius": 13, "color": (215, 215, 200), "hp": 2, "xp": 1, "ai": "chase", "sprite": "skeleton"},
+    "spider": {"speed": 130, "radius": 14, "color": (50, 40, 50), "hp": 2, "xp": 2, "ai": "zigzag", "sprite": "spider"},
+    "shaman": {"speed": 55, "radius": 15, "color": (120, 255, 140), "hp": 7, "xp": 5, "ai": "healer", "sprite": "shaman"},
+    "mimic": {"speed": 120, "radius": 18, "color": (160, 100, 50), "hp": 15, "xp": 8, "ai": "mimic", "sprite": "mimic"},
+    "king_slime": {"speed": 40, "radius": 36, "color": (80, 140, 230), "hp": 80, "xp": 25, "ai": "chase", "sprite": "king_slime"},
 }
 
 # Vanaf wanneer en hoe vaak
@@ -100,10 +110,17 @@ SPAWN_TABLE = {
     "tank": {"start": 60, "weight": 2},
     "boar": {"start": 90, "weight": 3},
     "blob": {"start": 120, "weight": 3},
+    "spider": {"start": 30, "weight": 3},
+    "ghost": {"start": 50, "weight": 3},
+    "bomber": {"start": 75, "weight": 2},
+    "mimic": {"start": 100, "weight": 0.5},
+    "shaman": {"start": 140, "weight": 1},
+    "necro": {"start": 160, "weight": 1},
+    "king_slime": {"start": 240, "weight": 0.3},
 }
 
-SPLIT_INTO = {"blob": "mini_blob"}
-SPLIT_COUNT = 2
+SPLIT_INTO = {"blob": "mini_blob", "king_slime": "walker"}
+SPLIT_COUNT = {"blob": 2, "king_slime": 5}
 
 ELITE_CHANCE = 0.02
 ELITE_START = 60
@@ -124,6 +141,20 @@ ENEMY_BULLET_SPEED = 220
 ENEMY_BULLET_RADIUS = 6
 ENEMY_BULLET_LIFETIME = 3.0
 
+GHOST_FADE_SPEED = 2.5
+EXPLODE_RANGE = 60
+EXPLODE_FUSE = 0.8
+EXPLODE_RADIUS = 90
+SUMMON_RANGE = 300
+SUMMON_COOLDOWN = 5.0
+SUMMON_COUNT = 3
+ZIGZAG_WIDTH = 0.9
+ZIGZAG_SPEED = 6
+HEAL_COOLDOWN = 3.0
+HEAL_RADIUS = 160
+HEAL_AMOUNT = 3
+MIMIC_WAKE = 140
+
 # Schieten
 FIRE_INTERVAL = 0.5
 FIRE_INTERVAL_MIN = 0.15
@@ -136,7 +167,7 @@ BULLET_SPRITE = "bullet_default"
 MULTISHOT_SPREAD = 12
 
 # Wapens
-MAX_WEAPONS = 4
+MAX_WEAPONS = 6
 WEAPON_MAX_LEVEL = 5
 WEAPONS = {
     "wand": {"name": "Toverstaf", "desc": "Schiet op de dichtstbijzijnde vijand", "icon": "icon_wand"},
@@ -144,6 +175,9 @@ WEAPONS = {
     "blades": {"name": "Draaiende sterren", "desc": "Sterren draaien om je heen", "icon": "blade"},
     "aura": {"name": "Heilige cirkel", "desc": "Doet schade aan alles dichtbij", "icon": "icon_aura"},
     "lightning": {"name": "Bliksem", "desc": "Slaat in op willekeurige vijanden", "icon": "lightning"},
+    "boomerang": {"name": "Boemerang", "desc": "Vliegt weg en komt weer terug", "icon": "boomerang"},
+    "meteor": {"name": "Meteoor", "desc": "Laat meteoren op vijanden vallen", "icon": "meteor"},
+    "fire": {"name": "Vuurspoor", "desc": "Laat brandende vlammen achter je", "icon": "fire"},
 }
 KNIFE_INTERVAL = 1.1
 KNIFE_SPEED = 600
@@ -154,6 +188,16 @@ AURA_RADIUS = 70
 AURA_TICK = 0.5
 LIGHTNING_INTERVAL = 2.6
 LIGHTNING_RANGE = 500
+BOOMERANG_INTERVAL = 1.6
+BOOMERANG_SPEED = 450
+BOOMERANG_TIME = 0.6
+METEOR_INTERVAL = 3.0
+METEOR_DELAY = 0.8
+METEOR_RADIUS = 70
+FIRE_DROP_TIME = 0.25
+FIRE_LIFE = 2.0
+FIRE_RADIUS = 22
+FIRE_TICK = 0.4
 
 # Damage
 PLAYER_MAX_HP = 5
@@ -171,12 +215,16 @@ XP_GROWTH = 3
 
 # Pickups op de map
 PICKUP_DROP_CHANCE = 0.015
-PICKUP_WEIGHTS = {"heart": 4, "magnet": 2, "bomb": 1}
+PICKUP_WEIGHTS = {"heart": 4, "magnet": 2, "bomb": 1, "freeze": 1, "boots": 1, "potion": 1}
 PICKUP_RADIUS = 14
 PICKUP_LIFETIME = 30
 BOMB_RANGE = 600
 BOMB_BOSS_DAMAGE = 25
 CHEST_COINS = 15
+FREEZE_TIME = 4
+BOOTS_TIME = 8
+BOOTS_SPEED = 1.5
+POTION_TIME = 15
 
 # Upgrades
 UPGRADE_CHOICES = 3
@@ -195,9 +243,32 @@ UPGRADE_LUCK = 0.3
 MULTISHOT_MAX = 3
 PIERCE_MAX = 4
 REGEN_MAX = 3
+UPGRADE_LIFESTEAL = 0.03
+LIFESTEAL_MAX = 0.15
+UPGRADE_THORNS = 3
+DASH_SPEED = 900
+DASH_DURATION = 0.15
+DASH_COOLDOWN_PLAYER = 2.0
+
+# Kill streaks: na zoveel kills achter elkaar komt er een tekst
+STREAK_TIME = 1.5
+STREAK_TEXTS = {2: "DUBBELE KILL", 3: "DRIEDUBBEL", 5: "MULTI KILL", 10: "RAMPAGE", 25: "ONSTOPBAAR",
+                50: "GODLIKE", 100: "WAT IS DIT", 250: "BEL DE POLITIE"}
+
+# Random events
+EVENT_FIRST = 90
+EVENT_INTERVAL = 120
+
+# Dag en nacht, een hele dag duurt zoveel seconden
+DAY_LENGTH = 240
+NIGHT_DARKNESS = 150
+
+# Gems en de gem winkel
+REVIVE_COST = 50
+LOOTBOX_COST = 100
+MEGA_LOOTBOX_COST = 450
 
 # Battle pass
-BP_SAVE_FILE = "battlepass.json"
 BP_TIERS = 50
 BP_XP_PER_TIER = 100
 BP_XP_PER_SECOND = 1

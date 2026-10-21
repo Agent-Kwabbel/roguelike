@@ -3,15 +3,40 @@ import random
 
 import pygame
 
+import config
 import sprites
 
 texts = []
 particles = []
+banners = []
+shaking = 0
 
 
 def clear():
+    global shaking
     texts.clear()
     particles.clear()
+    banners.clear()
+    shaking = 0
+
+
+def shake(amount):
+    global shaking
+    if not config.get("screen_shake"):
+        return
+    shaking = max(shaking, amount)
+
+
+def shake_offset():
+    if shaking <= 0:
+        return pygame.Vector2(0, 0)
+    return pygame.Vector2(random.uniform(-shaking, shaking), random.uniform(-shaking, shaking))
+
+
+def announce(text, color=(255, 220, 60), size=64):
+    # grote tekst midden in beeld, oude banners schuiven weg
+    banners.clear()
+    banners.append({"text": text, "color": color, "size": size, "life": 1.6})
 
 
 def add_text(pos, text, color=(255, 255, 255), size=22):
@@ -35,6 +60,11 @@ def burst(pos, color, count=8):
 
 
 def update(dt):
+    global shaking
+    shaking = max(0, shaking - 30 * dt)
+    for banner in banners:
+        banner["life"] -= dt
+    banners[:] = [b for b in banners if b["life"] > 0]
     for text in texts:
         text["pos"].y -= 40 * dt
         text["life"] -= dt
@@ -57,3 +87,18 @@ def draw(screen, camera):
         x, y = text["pos"] - camera
         screen.blit(shadow, (x - image.get_width() / 2 + 2, y + 2))
         screen.blit(image, (x - image.get_width() / 2, y))
+
+
+def draw_banners(screen):
+    for banner in banners:
+        # eerst even groot, dan normaal
+        grow = 1 + max(0, banner["life"] - 1.4) * 2
+        size = int(banner["size"] * grow)
+        image = sprites.font(size).render(banner["text"], True, banner["color"])
+        shadow = sprites.font(size).render(banner["text"], True, (0, 0, 0))
+        if banner["life"] < 0.4:
+            image.set_alpha(int(banner["life"] / 0.4 * 255))
+            shadow.set_alpha(int(banner["life"] / 0.4 * 255))
+        x = screen.get_width() / 2 - image.get_width() / 2
+        screen.blit(shadow, (x + 3, 163))
+        screen.blit(image, (x, 160))

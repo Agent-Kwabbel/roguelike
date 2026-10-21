@@ -67,6 +67,27 @@ def white(image):
     return cache[key]
 
 
+def blue(image):
+    key = ("blue", image)
+    if key not in cache:
+        copy = image.copy()
+        copy.fill((120, 160, 255), special_flags=pygame.BLEND_RGB_MULT)
+        copy.fill((40, 60, 90), special_flags=pygame.BLEND_RGB_ADD)
+        cache[key] = copy
+    return cache[key]
+
+
+def faded(image, alpha):
+    # alpha van 0 tot 1, afronden zodat de cache klein blijft
+    alpha = round(alpha * 10) / 10
+    key = ("fade", image, alpha)
+    if key not in cache:
+        copy = image.copy()
+        copy.fill((255, 255, 255, int(alpha * 255)), special_flags=pygame.BLEND_RGBA_MULT)
+        cache[key] = copy
+    return cache[key]
+
+
 def font(size):
     if size not in fonts:
         fonts[size] = pygame.font.Font(None, size)

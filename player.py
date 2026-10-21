@@ -18,6 +18,10 @@ from settings import (
     BULLET_SPRITE,
     CRIT_MULTIPLIER,
     REGEN_TIME,
+    BOOTS_SPEED,
+    DASH_SPEED,
+    DASH_DURATION,
+    DASH_COOLDOWN_PLAYER,
 )
 from weapons import Wand
 
@@ -50,6 +54,14 @@ class Player:
         self.bullet_sprite = bullet_sprite
         self.weapons = [Wand()]
         self.anim_time = 0
+        self.lifesteal = 0
+        self.thorns = 0
+        self.can_dash = False
+        self.dash_timer = 0
+        self.dash_cooldown = 0
+        self.boots_timer = 0
+        self.potion_timer = 0
+        self.still_time = 0
 
     def read_input(self):
         keys = pygame.key.get_pressed()
@@ -68,11 +80,33 @@ class Player:
             self.facing = move
         self.move = move
 
+    def dash(self):
+        if not self.can_dash or self.dash_cooldown > 0:
+            return
+        self.dash_timer = DASH_DURATION
+        self.dash_cooldown = DASH_COOLDOWN_PLAYER
+        self.invis_timer = max(self.invis_timer, DASH_DURATION + 0.1)
+        effects.burst(self.pos, (200, 220, 255), 8)
+
     def update(self, dt):
-        self.pos += self.move * self.speed * dt
+        self.dash_cooldown = max(0, self.dash_cooldown - dt)
+        self.boots_timer = max(0, self.boots_timer - dt)
+        self.potion_timer = max(0, self.potion_timer - dt)
+        if self.dash_timer > 0:
+            self.dash_timer -= dt
+            self.pos += self.facing * DASH_SPEED * dt
+        elif self.boots_timer > 0:
+            self.pos += self.move * self.speed * BOOTS_SPEED * dt
+            if self.move.length() > 0 and random.random() < 0.3:
+                effects.burst(self.pos + (0, 16), (255, 220, 80), 1)
+        else:
+            self.pos += self.move * self.speed * dt
         self.invis_timer = max(0, self.invis_timer - dt)
         if self.move.length() > 0:
             self.anim_time += dt
+            self.still_time = 0
+        else:
+            self.still_time += dt
         if self.regen > 0 and self.hp < self.max_hp:
             self.regen_timer += dt * self.regen
             if self.regen_timer >= REGEN_TIME:
@@ -81,14 +115,17 @@ class Player:
                 effects.add_text(self.pos + (0, -24), "+1", (120, 240, 120))
 
     def take_damage(self, amount):
+        """Geeft True als de klap echt aankwam (ook als hij geblokt werd)."""
         if self.invis_timer > 0:
-            return
+            return False
         self.invis_timer = INVIS_TIME
         if random.random() < self.armor:
             effects.add_text(self.pos + (0, -24), "Geblokt", (140, 190, 255))
-            return
+            return True
         self.hp -= amount
         effects.burst(self.pos, (220, 40, 40), 10)
+        effects.shake(6)
+        return True
 
     def heal(self, amount):
         self.hp = min(self.max_hp, self.hp + amount)
@@ -102,6 +139,8 @@ class Player:
         return XP_BASE + (self.level - 1) * XP_GROWTH
 
     def add_xp(self, amount):
+        if self.potion_timer > 0:
+            amount *= 2
         self.xp += amount * self.xp_mult
         while self.xp >= self.xp_needed():
             self.xp -= self.xp_needed()
@@ -130,5 +169,9 @@ class Player:
         image = sprites.frame(self.sprite, self.anim_time, 8)
         if self.facing.x < 0:
             image = sprites.flipped(image)
+        if self.dash_timer > 0:
+            sprites.draw_centered(screen, sprites.faded(image, 0.3), pos - self.facing * 20)
+            sprites.draw_centered(screen, sprites.faded(image, 0.5), pos - self.facing * 10)
+
         pygame.draw.ellipse(screen, (30, 60, 30), (pos.x - 14, pos.y + image.get_height() / 2 - 8, 28, 10))
         sprites.draw_centered(screen, image, pos)

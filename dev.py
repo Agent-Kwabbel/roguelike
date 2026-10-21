@@ -1,8 +1,11 @@
 import pygame
 
+import achievements
 import battlepass
 import challenges
-from enemy import spawn_boss
+import saves
+from enemy import spawn_boss, spawn_kind
+from pickup import Pickup
 from menus import text_center, panel, YELLOW, GREY
 from settings import W, H, WEAPONS, MAX_WEAPONS, WEAPON_MAX_LEVEL, BP_XP_PER_TIER
 from weapons import make_weapon
@@ -73,6 +76,29 @@ def run_coins(state):
     return "+100 coins (na de run)"
 
 
+NEW_ENEMIES = ["ghost", "bomber", "necro", "spider", "shaman", "mimic", "king_slime"]
+
+
+def spawn_new_enemies(state):
+    player = state["player"]
+    for kind in NEW_ENEMIES:
+        state["enemies"].append(spawn_kind(kind, player.pos, state["time"], state["difficulty"], state["world"]))
+    return f"{len(NEW_ENEMIES)} nieuwe vijanden gespawnd"
+
+
+def next_event(state):
+    state["next_event"] = state["time"]
+    return "Event komt eraan"
+
+
+def drop_pickups(state):
+    player = state["player"]
+    for i, kind in enumerate(["freeze", "boots", "potion", "chest"]):
+        offset = pygame.Vector2(80, 0).rotate(i * 90)
+        state["pickups"].append(Pickup(kind, player.pos + offset))
+    return "Pickups rond je neergelegd"
+
+
 # ---------- in het menu ----------
 
 def add_coins(state):
@@ -96,12 +122,32 @@ def toggle_premium(state):
     return "Premium aan" if bp["premium"] else "Premium uit"
 
 
+def add_gems(state):
+    state["bp"]["gems"] += 1000
+    battlepass.save(state["bp"])
+    return "+1000 gems (gratis, niet zeggen)"
+
+
+def all_achievements(state):
+    achievements.unlock_all(state["bp"])
+    battlepass.save(state["bp"])
+    return "Alle achievements gehaald"
+
+
+def show_popup(state):
+    global is_open
+    state["popup"] = True
+    is_open = False
+    return ""
+
+
 def reset_save(state):
     bp = state["bp"]
     bp.clear()
     bp.update(battlepass.new_data())
     challenges.refresh(bp)
     battlepass.save(bp)
+    saves.delete_run()
     return "Save gereset"
 
 
@@ -115,12 +161,18 @@ GAME_OPTIONS = [
     ("Nieuw wapen", new_weapon),
     ("Wapens max level", max_weapons),
     ("+100 coins", run_coins),
+    ("Spawn nieuwe vijanden", spawn_new_enemies),
+    ("Random event", next_event),
+    ("Pickups neerleggen", drop_pickups),
 ]
 
 MENU_OPTIONS = [
     ("+1000 coins", add_coins),
     ("+1 Battle Pass tier", add_tier),
     ("Premium aan/uit", toggle_premium),
+    ("+1000 gems", add_gems),
+    ("Alle achievements", all_achievements),
+    ("Starter pack popup", show_popup),
     ("Save resetten", reset_save),
 ]
 

@@ -21,6 +21,9 @@ from settings import (
     MAX_WEAPONS,
     WEAPON_MAX_LEVEL,
     WEAPONS,
+    UPGRADE_LIFESTEAL,
+    LIFESTEAL_MAX,
+    UPGRADE_THORNS,
 )
 from weapons import make_weapon
 
@@ -76,6 +79,18 @@ def more_luck(player):
     player.luck += UPGRADE_LUCK
 
 
+def more_lifesteal(player):
+    player.lifesteal = min(LIFESTEAL_MAX, player.lifesteal + UPGRADE_LIFESTEAL)
+
+
+def more_thorns(player):
+    player.thorns += UPGRADE_THORNS
+
+
+def learn_dash(player):
+    player.can_dash = True
+
+
 def add_knives(player):
     if not player.has_weapon("knives"):
         player.weapons.append(make_weapon("knives"))
@@ -101,6 +116,11 @@ UPGRADES = [
      "can": lambda p: p.regen < REGEN_MAX},
     {"name": "Wijsheid", "desc": "+20% XP", "apply": more_xp, "icon": "gem_big"},
     {"name": "Geluk", "desc": "Vaker pickups", "apply": more_luck, "icon": "icon_luck"},
+    {"name": "Levensroof", "desc": "+3% kans op 1 HP per kill", "apply": more_lifesteal, "icon": "heart",
+     "can": lambda p: p.lifesteal < LIFESTEAL_MAX},
+    {"name": "Doornen", "desc": "Vijanden die je raken krijgen +3 damage terug", "apply": more_thorns, "icon": "icon_armor"},
+    {"name": "Dash", "desc": "Druk op spatie om weg te schieten", "apply": learn_dash, "icon": "boots",
+     "can": lambda p: not p.can_dash},
 ]
 
 

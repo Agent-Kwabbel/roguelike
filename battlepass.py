@@ -1,7 +1,5 @@
-import json
-
+import saves
 from settings import (
-    BP_SAVE_FILE,
     BP_TIERS,
     BP_XP_PER_TIER,
     BP_XP_PER_SECOND,
@@ -162,6 +160,17 @@ SHOP_ITEMS = [
     {"type": "bullet", "name": "Standaard kogels", "sprite": "bullet_default", "price": 0},
 ]
 
+# Uit lootboxen in de gem winkel, rarity 1 is zeldzaam tot 3 legendarisch
+GEM_REWARDS = [
+    {"type": "skin", "name": "Banaan", "sprite": "skin_banana", "rarity": 1},
+    {"type": "bullet", "name": "Regenboog kogels", "sprite": "bullet_rainbow", "rarity": 1},
+    {"type": "skin", "name": "Kat", "sprite": "skin_cat", "rarity": 2},
+    {"type": "skin", "name": "Dino", "sprite": "skin_dino", "rarity": 2},
+    {"type": "bullet", "name": "Muntjes kogels", "sprite": "bullet_coin", "rarity": 2},
+    {"type": "skin", "name": "Clown", "sprite": "skin_clown", "rarity": 3},
+    {"type": "skin", "name": "Walvis", "sprite": "skin_whale"},
+]
+
 PERK_EFFECTS = {
     "start_hp": more_hp,
     "start_damage": more_damage,
@@ -185,22 +194,26 @@ def new_data():
         "claimed_free": 0,
         "claimed_premium": 0,
         "challenges": {},
+        "gems": 0,
+        "boosters": {"xp": 0, "coins": 0},
+        "pet": False,
+        "whale": False,
+        "boxes_opened": 0,
+        "achievements": [],
+        "totals": {"kills": 0, "elites": 0, "runs": 0},
     }
 
 
 def load():
     data = new_data()
-    try:
-        with open(BP_SAVE_FILE) as f:
-            data.update(json.load(f))
-    except (OSError, ValueError):
-        pass
+    saved = saves.load_profile()
+    if saved:
+        data.update(saved)
     return data
 
 
 def save(data):
-    with open(BP_SAVE_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    saves.save_profile(data)
 
 
 def current_tier(data):
@@ -287,7 +300,7 @@ def equip(data, reward):
 
 
 def find_reward(name):
-    for reward in FREE_TIERS + PREMIUM_TIERS + SHOP_ITEMS:
+    for reward in FREE_TIERS + PREMIUM_TIERS + SHOP_ITEMS + GEM_REWARDS:
         if reward["name"] == name:
             return reward
     return None
