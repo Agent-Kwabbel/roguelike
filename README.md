@@ -27,7 +27,11 @@ Vul hier een korte beschrijving van je game aan (max. ongeveer 10 regels):
 
 - **Idee:** De game is een top-down roguelike shooter geinspireerd door Vampire Survivors. De basis is dat je rondloopt als de karakter en de vijanden die rondlopen dood en hun xp verzamelt om levels te verzamelen en up te graden.
 - **Functionaliteiten:** ik wil de speler implementeren met standard top-down bewegingen en automatisch schieten op de dichtsbijzijnde vijand. Daarnaast wil ik minstens twee soorten vijanden implementeren die spawnen rondom de speler, waarvan een een tragere maar sterkere vijand is en een kleinere, snellere, maar zwakkere vijand. Als laatst is belangrijk dat het level systeem wordt geimplementeerd. Dus dat je levels kan verzeamelen en dan als je een level omhoog gaat dat je een upgrade kan kiezen.
-- **Besturing:** Je gebruikt WASD of pijltjes, er wordt automatisch geschoten op de dichtsbijzijnde vijand, en je kan je upgrade kiezen met 1, 2, of 3.
+- **Gebouwen:** In de wereld spawnen willekeurig huizen, schuren, torens en ruines. Je loopt er via de deur in, het dak verdwijnt als je binnen bent en er ligt loot (kisten, hartjes, coins, gems). Muren houden jou en de vijanden tegen, vijanden lopen om naar de deur.
+- **Terrein:** De wereld wordt gemaakt met een hoogtekaart (noise): meren, stranden, heuvels met terrassen en bergen met rotswanden en sneeuw. Diep water en bergen houden jou en de vijanden tegen, gebouwen staan alleen op vlak gras.
+- **Besturing:** Je gebruikt WASD of pijltjes, er wordt automatisch geschoten op de dichtsbijzijnde vijand, en je kan je upgrade kiezen met 1, 2, of 3. Esc pauzeert (Q stopt de run). In het menu open je met B de Battle Pass (P koopt premium met coins, Enter rust een skin of kogels uit), met C de dagelijkse en wekelijkse challenges en met K de winkel. F1 opent overal een dev menu (god mode, levels, baas spawnen, coins, tiers, save resetten).
+
+De sprites in `assets/` worden gemaakt door `uv run tools/make_sprites.py`.
 
 ## Persoonlijke leerdoelen
 

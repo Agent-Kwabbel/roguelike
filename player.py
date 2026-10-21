@@ -1,36 +1,55 @@
+import random
+
 import pygame
 
+import effects
+import sprites
 from settings import (
     PLAYER_SPEED,
     PLAYER_RADIUS,
     PLAYER_MAX_HP,
     INVIS_TIME,
     FIRE_INTERVAL,
-    FIRE_RANGE,
     BULLET_DAMAGE,
     PICKUP_RANGE,
     XP_BASE,
     XP_GROWTH,
+    PLAYER_SPRITE,
+    BULLET_SPRITE,
+    CRIT_MULTIPLIER,
+    REGEN_TIME,
 )
-from bullet import Bullet
+from weapons import Wand
 
 
 class Player:
-    def __init__(self):
+    def __init__(self, max_hp=PLAYER_MAX_HP, sprite=PLAYER_SPRITE, bullet_sprite=BULLET_SPRITE):
         self.pos = pygame.Vector2(0, 0)
         self.move = pygame.Vector2(0, 0)
+        self.facing = pygame.Vector2(1, 0)
         self.radius = PLAYER_RADIUS
         self.speed = PLAYER_SPEED
-        self.max_hp = PLAYER_MAX_HP
-        self.hp = PLAYER_MAX_HP
+        self.max_hp = max_hp
+        self.hp = max_hp
         self.fire_interval = FIRE_INTERVAL
         self.damage = BULLET_DAMAGE
         self.pickup_range = PICKUP_RANGE
+        self.crit_chance = 0.05
+        self.multishot = 0
+        self.pierce = 0
+        self.regen = 0
+        self.regen_timer = 0
+        self.armor = 0
+        self.xp_mult = 1
+        self.luck = 1
         self.invis_timer = 0
-        self.fire_timer = 0
         self.xp = 0
         self.level = 1
         self.pending_upgrades = 0
+        self.sprite = sprite
+        self.bullet_sprite = bullet_sprite
+        self.weapons = [Wand()]
+        self.anim_time = 0
 
     def read_input(self):
         keys = pygame.key.get_pressed()
@@ -46,47 +65,70 @@ class Player:
 
         if move.length() > 0:
             move = move.normalize()
+            self.facing = move
         self.move = move
 
     def update(self, dt):
         self.pos += self.move * self.speed * dt
         self.invis_timer = max(0, self.invis_timer - dt)
-        self.fire_timer = max(0, self.fire_timer - dt)
+        if self.move.length() > 0:
+            self.anim_time += dt
+        if self.regen > 0 and self.hp < self.max_hp:
+            self.regen_timer += dt * self.regen
+            if self.regen_timer >= REGEN_TIME:
+                self.regen_timer = 0
+                self.hp += 1
+                effects.add_text(self.pos + (0, -24), "+1", (120, 240, 120))
 
     def take_damage(self, amount):
         if self.invis_timer > 0:
             return
-        self.hp -= amount
         self.invis_timer = INVIS_TIME
+        if random.random() < self.armor:
+            effects.add_text(self.pos + (0, -24), "Geblokt", (140, 190, 255))
+            return
+        self.hp -= amount
+        effects.burst(self.pos, (220, 40, 40), 10)
+
+    def heal(self, amount):
+        self.hp = min(self.max_hp, self.hp + amount)
+
+    def roll_damage(self, damage):
+        if random.random() < self.crit_chance:
+            return damage * CRIT_MULTIPLIER, True
+        return damage, False
 
     def xp_needed(self):
         return XP_BASE + (self.level - 1) * XP_GROWTH
 
     def add_xp(self, amount):
-        self.xp += amount
+        self.xp += amount * self.xp_mult
         while self.xp >= self.xp_needed():
             self.xp -= self.xp_needed()
             self.level += 1
             self.pending_upgrades += 1
 
-    def shoot(self, enemies):
-        if self.fire_timer > 0:
-            return None
-        target = None
-        best = FIRE_RANGE
-        for enemy in enemies:
-            distance = self.pos.distance_to(enemy.pos)
-            if distance < best:
-                best = distance
-                target = enemy
-        if target is None:
-            return None
-        self.fire_timer = self.fire_interval
-        direction = (target.pos - self.pos).normalize()
-        return Bullet(self.pos, direction, self.damage)
+    def has_weapon(self, key):
+        for weapon in self.weapons:
+            if weapon.key == key:
+                return True
+        return False
+
+    def update_weapons(self, dt, enemies):
+        bullets = []
+        for weapon in self.weapons:
+            bullets += weapon.update(dt, self, enemies)
+        return bullets
 
     def draw(self, screen, camera):
+        for weapon in self.weapons:
+            weapon.draw(screen, camera, self)
         # knipperen tijdens invis frames
         if self.invis_timer > 0 and int(self.invis_timer * 10) % 2 == 0:
             return
-        pygame.draw.circle(screen, (60, 120, 220), self.pos - camera, self.radius)
+        pos = self.pos - camera
+        image = sprites.frame(self.sprite, self.anim_time, 8)
+        if self.facing.x < 0:
+            image = sprites.flipped(image)
+        pygame.draw.ellipse(screen, (30, 60, 30), (pos.x - 14, pos.y + image.get_height() / 2 - 8, 28, 10))
+        sprites.draw_centered(screen, image, pos)
