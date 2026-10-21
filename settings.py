@@ -1,25 +1,25 @@
-# Beeldscherm
+# Screen
 W, H = 960, 640
 FPS = 60
 TILE = 64
 
-# Wereld
+# World
 CHUNK_TILES = 8
 CHUNKS_CACHED = 80
 DIRT_PATCH_CHANCE = 0.35
 FLOWER_TILE_CHANCE = 0.06
 DECO_PER_CHUNK = (3, 8)
 DECORATIONS = {"tuft": 6, "rock": 3, "bush": 3, "mushroom": 2, "stump": 1, "tree": 2, "pine": 2, "fence": 1}
-# grote dingen, hooguit een per chunk
+# big things, at most one per chunk
 STRUCTURE_CHANCE = 0.08
 STRUCTURES = {"well": 1}
 
-# Terrein. Hoogte gaat van 0 tot 1, elk niveau begint bij zijn grens.
+# Terrain. Height goes from 0 to 1, each level starts at its threshold.
 TERRAIN_SCALE = 1300
 TERRAIN_OCTAVES = 4
 MOUNTAIN_SCALE = 2600
 MOISTURE_SCALE = 1400
-# rond het begin is het altijd vlak gras
+# around the start it's always flat grass
 SAFE_RADIUS = 700
 TERRAIN_LEVELS = [
     ("deep_water", 0.0),
@@ -37,11 +37,14 @@ SHADE_STRENGTH = 6
 CLIFF_HEIGHT = 36
 FOREST_MOISTURE = 0.6
 
-# Gebouwen waar je in kan, hooguit een per chunk. size is in tegels.
-# loot: getal onder 1 is een kans, 1 of hoger is het maximale aantal
+# Buildings you can enter, at most one per chunk. size is in tiles.
+# loot: a number below 1 is a chance, 1 or higher is the max amount
 BUILDING_CHANCE = 0.18
 WALL = 16
 ROOF_FADE = 600
+# roof becomes see-through when you're close
+ROOF_NEAR_ALPHA = 110
+ROOF_NEAR_RANGE = 180
 LOOT_COIN_VALUE = 3
 BUILDINGS = {
     "house": {"weight": 4, "size": (5, 4), "floor": "floor_wood", "wall": (225, 205, 165), "roof": (185, 75, 60),
@@ -54,35 +57,75 @@ BUILDINGS = {
              "furniture": ["rubble", "rubble"], "loot": {"coin": 2, "heart": 0.3}},
 }
 
-# Speler
+# Player
 PLAYER_SPEED = 220
 PLAYER_RADIUS = 14
 PLAYER_SPRITE = "skin_default"
 
 # Enemies
-SPAWN_INTERVAL = 1.2
-SPAWN_INTERVAL_MIN = 0.3
-SPAWN_INTERVAL_DECAY = 0.01
-SPAWN_DISTANCE = 600
+SPAWN_DISTANCE = 640
+# new enemies rise out of a portal for this long, they can't hurt you yet
+SPAWN_IN_TIME = 0.5
 
-# Difficulty (per minuut speeltijd)
-HP_GROWTH = 0.4
-SPEED_GROWTH = 0.06
-SPEED_FACTOR_MAX = 1.4
-MAX_ENEMIES = 150
+# Difficulty, m is minutes of "effective" time (play time * ramp of the difficulty).
+# Enemy hp is 1 + HP_GROWTH * m + HP_CURVE * m * m, so it speeds up the longer you play
+HP_GROWTH = 0.28
+HP_CURVE = 0.022
+SPEED_GROWTH = 0.04
+SPEED_FACTOR_MAX = 1.6
 
-# Moeilijkheidsgraden, normal is de standaard balans
+# Difficulty levels. ramp is how fast you go through the phases,
+# so the hard ones start almost like normal but get hard much sooner
 DIFFICULTIES = {
-    "easy": {"name": "Easy", "spawn": 1.4, "enemy_hp": 0.7, "enemy_speed": 0.85, "enemy_damage": 1, "player_hp": 7},
-    "normal": {"name": "Normal", "spawn": 1.0, "enemy_hp": 1.0, "enemy_speed": 1.0, "enemy_damage": 1, "player_hp": 5},
-    "hard": {"name": "Hard", "spawn": 0.75, "enemy_hp": 1.3, "enemy_speed": 1.1, "enemy_damage": 1, "player_hp": 4},
-    "extreme": {"name": "Extreme", "spawn": 0.5, "enemy_hp": 1.7, "enemy_speed": 1.25, "enemy_damage": 2, "player_hp": 3},
+    "easy": {"name": "Easy", "spawn": 1.3, "enemy_hp": 0.8, "enemy_speed": 0.9, "enemy_damage": 1, "player_hp": 6,
+             "ramp": 0.8, "elite": 0.7},
+    "normal": {"name": "Normal", "spawn": 0.9, "enemy_hp": 1.0, "enemy_speed": 1.0, "enemy_damage": 1, "player_hp": 5,
+               "ramp": 1.0, "elite": 1},
+    "hard": {"name": "Hard", "spawn": 0.8, "enemy_hp": 1.15, "enemy_speed": 1.05, "enemy_damage": 1, "player_hp": 5,
+             "ramp": 1.2, "elite": 1.5},
+    "extreme": {"name": "Extreme", "spawn": 0.7, "enemy_hp": 1.3, "enemy_speed": 1.1, "enemy_damage": 1, "player_hp": 4,
+                "ramp": 1.4, "elite": 1.5, "boss_affix": True, "elite_affix": True},
+    "nightmare": {"name": "Nightmare", "spawn": 0.6, "enemy_hp": 1.5, "enemy_speed": 1.15, "enemy_damage": 1,
+                  "player_hp": 3, "ramp": 1.7, "elite": 2, "boss_affix": True, "elite_affix": True, "boss_enrage": True},
 }
 
-# ai: chase loopt recht op je af, shooter houdt afstand en schiet,
-# dasher stormt op je af, boss schiet kogels in een ring,
-# ghost gaat door muren, exploder ontploft, summoner roept skeletten op,
-# zigzag slingert, healer heelt andere vijanden, mimic doet alsof hij een kist is
+# A run goes through phases. start is in effective seconds. spawn is the time between spawns,
+# pack how many come at once. Between two phases spawn slides smoothly to the next value.
+# damage is extra damage on top of the difficulty, events is the time between random events.
+PHASES = [
+    {"name": "Meadow", "start": 0, "color": (140, 220, 120), "spawn": 1.1, "pack": 1, "elite": 0, "damage": 0,
+     "max_enemies": 150, "events": 120,
+     "enemies": {"walker": 10, "runner": 4, "spider": 2, "archer": 1}},
+    {"name": "Woods", "start": 150, "color": (90, 190, 110), "spawn": 0.45, "pack": 1, "elite": 0.015, "damage": 0,
+     "max_enemies": 150, "events": 120,
+     "enemies": {"walker": 8, "runner": 5, "spider": 3, "archer": 3, "ghost": 3, "boar": 3, "tank": 2}},
+    {"name": "Dusk", "start": 360, "color": (250, 170, 80), "spawn": 0.55, "pack": 2, "elite": 0.025, "damage": 0,
+     "max_enemies": 150, "events": 100,
+     "enemies": {"walker": 5, "runner": 4, "spider": 3, "archer": 3, "ghost": 3, "boar": 3, "tank": 3, "bomber": 2,
+                 "blob": 3, "mimic": 0.5, "shaman": 1, "necro": 1}},
+    {"name": "Cursed lands", "start": 600, "color": (190, 110, 240), "spawn": 0.45, "pack": 2, "elite": 0.035,
+     "damage": 1, "max_enemies": 160, "events": 90,
+     "enemies": {"spider": 3, "archer": 2, "ghost": 3, "boar": 3, "tank": 3, "bomber": 3, "blob": 3, "mimic": 0.5,
+                 "shaman": 1.5, "necro": 1.5, "king_slime": 0.3, "knight": 4, "mage": 3, "lava_slime": 3}},
+    {"name": "The abyss", "start": 900, "color": (230, 60, 80), "spawn": 0.4, "pack": 3, "elite": 0.05, "damage": 1,
+     "max_enemies": 180, "events": 75, "affixes": True, "double_boss": True,
+     "enemies": {"ghost": 2, "boar": 2, "tank": 3, "bomber": 3, "blob": 2, "mimic": 0.5, "shaman": 1.5, "necro": 1.5,
+                 "king_slime": 0.5, "knight": 4, "mage": 3, "lava_slime": 3, "wraith": 3, "crystal_golem": 1.5}},
+    {"name": "Last stand", "start": 1320, "color": (255, 60, 40), "spawn": 0.3, "pack": 4, "elite": 0.07, "damage": 2,
+     "max_enemies": 200, "events": 60, "affixes": True, "double_boss": True,
+     "enemies": {"tank": 3, "bomber": 3, "blob": 2, "mimic": 0.5, "shaman": 2, "necro": 2, "king_slime": 1,
+                 "knight": 5, "mage": 4, "lava_slime": 3, "wraith": 4, "crystal_golem": 2.5}},
+]
+# in real seconds, on every difficulty
+REAPER_TIME = 1800
+REAPER_DAMAGE = 99
+WIN_COINS = 150
+PHASE_COINS = 10
+
+# ai: chase walks straight at you, shooter keeps distance and shoots,
+# dasher charges at you, boss shoots bullets in a ring,
+# ghost goes through walls, exploder explodes, summoner calls skeletons,
+# zigzag swerves, healer heals other enemies, mimic pretends to be a chest
 ENEMY_TYPES = {
     "walker": {"speed": 70, "radius": 16, "color": (90, 200, 80), "hp": 3, "xp": 1, "ai": "chase", "sprite": "slime"},
     "runner": {"speed": 140, "radius": 10, "color": (90, 50, 120), "hp": 1, "xp": 2, "ai": "chase", "sprite": "bat"},
@@ -100,33 +143,50 @@ ENEMY_TYPES = {
     "shaman": {"speed": 55, "radius": 15, "color": (120, 255, 140), "hp": 7, "xp": 5, "ai": "healer", "sprite": "shaman"},
     "mimic": {"speed": 120, "radius": 18, "color": (160, 100, 50), "hp": 15, "xp": 8, "ai": "mimic", "sprite": "mimic"},
     "king_slime": {"speed": 40, "radius": 36, "color": (80, 140, 230), "hp": 80, "xp": 25, "ai": "chase", "sprite": "king_slime"},
+    # later phases. armor takes that much off every hit (a hit always does at least 1)
+    "knight": {"speed": 60, "radius": 15, "color": (160, 165, 180), "hp": 10, "xp": 6, "ai": "chase", "sprite": "knight",
+               "armor": 2},
+    "mage": {"speed": 60, "radius": 14, "color": (110, 50, 170), "hp": 6, "xp": 5, "ai": "shooter", "sprite": "mage",
+             "shots": 3},
+    "lava_slime": {"speed": 65, "radius": 16, "color": (240, 110, 40), "hp": 8, "xp": 4, "ai": "chase",
+                   "sprite": "lava_slime", "puddles": True},
+    "wraith": {"speed": 70, "radius": 15, "color": (120, 30, 50), "hp": 7, "xp": 5, "ai": "blinker", "sprite": "wraith"},
+    "crystal_golem": {"speed": 45, "radius": 26, "color": (90, 200, 230), "hp": 40, "xp": 15, "ai": "chase",
+                      "sprite": "crystal_golem", "armor": 1},
+    "mini_golem": {"speed": 80, "radius": 12, "color": (90, 200, 230), "hp": 6, "xp": 2, "ai": "chase",
+                   "sprite": "mini_golem"},
+    # bosses, pattern says how they attack
+    "bone_lord": {"speed": 50, "radius": 36, "color": (120, 240, 120), "hp": 260, "xp": 50, "ai": "boss",
+                  "sprite": "bone_lord", "pattern": "spiral"},
+    "golem_king": {"speed": 40, "radius": 40, "color": (200, 160, 80), "hp": 320, "xp": 60, "ai": "boss",
+                   "sprite": "golem_king", "pattern": "charge", "armor": 1},
+    "reaper": {"speed": 560, "radius": 40, "color": (40, 30, 50), "hp": 999999, "xp": 0, "ai": "reaper",
+               "sprite": "reaper"},
 }
 
-# Vanaf wanneer en hoe vaak
-SPAWN_TABLE = {
-    "walker": {"start": 0, "weight": 10},
-    "runner": {"start": 20, "weight": 5},
-    "archer": {"start": 45, "weight": 3},
-    "tank": {"start": 60, "weight": 2},
-    "boar": {"start": 90, "weight": 3},
-    "blob": {"start": 120, "weight": 3},
-    "spider": {"start": 30, "weight": 3},
-    "ghost": {"start": 50, "weight": 3},
-    "bomber": {"start": 75, "weight": 2},
-    "mimic": {"start": 100, "weight": 0.5},
-    "shaman": {"start": 140, "weight": 1},
-    "necro": {"start": 160, "weight": 1},
-    "king_slime": {"start": 240, "weight": 0.3},
-}
+SPLIT_INTO = {"blob": "mini_blob", "king_slime": "walker", "crystal_golem": "mini_golem"}
+SPLIT_COUNT = {"blob": 2, "king_slime": 5, "crystal_golem": 3}
 
-SPLIT_INTO = {"blob": "mini_blob", "king_slime": "walker"}
-SPLIT_COUNT = {"blob": 2, "king_slime": 5}
-
-ELITE_CHANCE = 0.02
-ELITE_START = 60
 ELITE_HP = 4
 ELITE_SCALE = 1.4
 BOSS_INTERVAL = 180
+# the bosses take turns
+BOSS_ORDER = ["boss", "bone_lord", "golem_king"]
+# every next boss has this much more hp
+BOSS_HP_GROWTH = 0.5
+BOSS_NAMES = {"boss": "The Butcher", "bone_lord": "Bone Lord", "golem_king": "Golem King", "reaper": "THE REAPER"}
+
+# Elites can get an extra power from the abyss on (and always on extreme and nightmare)
+AFFIXES = {
+    "swift": {"name": "Swift", "color": (120, 220, 255)},
+    "shielded": {"name": "Shielded", "color": (170, 170, 255)},
+    "vampiric": {"name": "Vampiric", "color": (230, 40, 70)},
+    "volatile": {"name": "Volatile", "color": (255, 140, 40)},
+}
+ELITE_COLOR = (250, 210, 60)
+SWIFT_SPEED = 1.5
+SHIELD_PART = 0.5
+VAMPIRE_HEAL = 0.25
 
 SHOOTER_RANGE = 260
 SHOOTER_COOLDOWN = 2.5
@@ -154,8 +214,24 @@ HEAL_COOLDOWN = 3.0
 HEAL_RADIUS = 160
 HEAL_AMOUNT = 3
 MIMIC_WAKE = 140
+BLINK_COOLDOWN = 4.0
+BLINK_TELL = 0.6
+BLINK_DISTANCE = 90
+SPIRAL_TIME = 2.5
+SPIRAL_REST = 2.0
+SPIRAL_STEP = 0.18
+CHARGE_WINDUP = 1.0
+CHARGE_TIME = 0.7
+CHARGE_COOLDOWN = 4.0
+CHARGE_SHOTS = 16
+ENRAGE_HP = 0.5
 
-# Schieten
+# Puddles of lava and cursed ground
+PUDDLE_INTERVAL = 1.2
+PUDDLE_RADIUS = 24
+PUDDLE_LIFE = 4
+
+# Shooting
 FIRE_INTERVAL = 0.5
 FIRE_INTERVAL_MIN = 0.15
 FIRE_RANGE = 450
@@ -166,19 +242,32 @@ BULLET_LIFETIME = 1.5
 BULLET_SPRITE = "bullet_default"
 MULTISHOT_SPREAD = 12
 
-# Wapens
+# Weapons
 MAX_WEAPONS = 6
 WEAPON_MAX_LEVEL = 5
 WEAPONS = {
-    "wand": {"name": "Toverstaf", "desc": "Schiet op de dichtstbijzijnde vijand", "icon": "icon_wand"},
-    "knives": {"name": "Werpmessen", "desc": "Gooit messen in je looprichting die doorboren", "icon": "knife"},
-    "blades": {"name": "Draaiende sterren", "desc": "Sterren draaien om je heen", "icon": "blade"},
-    "aura": {"name": "Heilige cirkel", "desc": "Doet schade aan alles dichtbij", "icon": "icon_aura"},
-    "lightning": {"name": "Bliksem", "desc": "Slaat in op willekeurige vijanden", "icon": "lightning"},
-    "boomerang": {"name": "Boemerang", "desc": "Vliegt weg en komt weer terug", "icon": "boomerang"},
-    "meteor": {"name": "Meteoor", "desc": "Laat meteoren op vijanden vallen", "icon": "meteor"},
-    "fire": {"name": "Vuurspoor", "desc": "Laat brandende vlammen achter je", "icon": "fire"},
+    "wand": {"name": "Magic wand", "desc": "Shoots at the nearest enemy", "icon": "icon_wand"},
+    "knives": {"name": "Throwing knives", "desc": "Throws piercing knives where you walk", "icon": "knife"},
+    "blades": {"name": "Spinning stars", "desc": "Stars circle around you", "icon": "blade"},
+    "aura": {"name": "Holy circle", "desc": "Damages everything close by", "icon": "icon_aura"},
+    "lightning": {"name": "Lightning", "desc": "Strikes random enemies", "icon": "lightning"},
+    "boomerang": {"name": "Boomerang", "desc": "Flies out and comes back", "icon": "boomerang"},
+    "meteor": {"name": "Meteor", "desc": "Drops meteors on enemies", "icon": "meteor"},
+    "fire": {"name": "Fire trail", "desc": "Leaves burning flames behind you", "icon": "fire"},
 }
+# A weapon at max level together with the right upgrade can evolve, offered from a chest
+EVOLUTIONS = {
+    "wand": {"name": "Arcane storm", "desc": "+2 bullets that pierce 2 more enemies", "needs": "Faster fire rate"},
+    "knives": {"name": "Thousand edges", "desc": "Also throws knives in all directions", "needs": "Multishot"},
+    "blades": {"name": "Guardian stars", "desc": "Twice the stars, wider circle", "needs": "Armor"},
+    "aura": {"name": "Sanctuary", "desc": "Much bigger and heals you now and then", "needs": "Regeneration"},
+    "lightning": {"name": "Thunder god", "desc": "Every strike jumps to 2 more enemies", "needs": "Critical hit"},
+    "boomerang": {"name": "Storm rang", "desc": "+2 boomerangs that fly further", "needs": "Pierce"},
+    "meteor": {"name": "Armageddon", "desc": "Twice the meteors, bigger blasts", "needs": "Luck"},
+    "fire": {"name": "Inferno", "desc": "Flames burn longer and faster", "needs": "Faster movement"},
+}
+SANCTUARY_HEAL = 20
+CHAIN_RANGE = 160
 KNIFE_INTERVAL = 1.1
 KNIFE_SPEED = 600
 BLADE_DISTANCE = 75
@@ -212,8 +301,10 @@ ORB_COLOR = (80, 220, 240)
 PICKUP_RANGE = 90
 XP_BASE = 5
 XP_GROWTH = 3
+# makes high levels take a lot longer
+XP_CURVE = 0.12
 
-# Pickups op de map
+# Pickups on the map
 PICKUP_DROP_CHANCE = 0.015
 PICKUP_WEIGHTS = {"heart": 4, "magnet": 2, "bomb": 1, "freeze": 1, "boots": 1, "potion": 1}
 PICKUP_RADIUS = 14
@@ -228,7 +319,7 @@ POTION_TIME = 15
 
 # Upgrades
 UPGRADE_CHOICES = 3
-UPGRADE_FIRE_FACTOR = 0.8
+UPGRADE_FIRE_FACTOR = 0.85
 UPGRADE_DAMAGE = 1
 UPGRADE_SPEED = 30
 PLAYER_SPEED_MAX = 360
@@ -236,34 +327,68 @@ UPGRADE_PICKUP = 40
 UPGRADE_HP = 1
 UPGRADE_CRIT = 0.08
 CRIT_MAX = 0.5
-UPGRADE_ARMOR = 0.1
-ARMOR_MAX = 0.5
-UPGRADE_XP = 0.2
+UPGRADE_ARMOR = 0.07
+ARMOR_MAX = 0.35
+UPGRADE_XP = 0.1
+XP_MULT_MAX = 1.4
 UPGRADE_LUCK = 0.3
 MULTISHOT_MAX = 3
 PIERCE_MAX = 4
 REGEN_MAX = 3
-UPGRADE_LIFESTEAL = 0.03
-LIFESTEAL_MAX = 0.15
+# lifesteal heals 1 hp every so many kills, every pick needs fewer kills
+LIFESTEAL_STEPS = [50, 40, 30, 25]
 UPGRADE_THORNS = 3
+UPGRADE_COOLDOWN = 0.92
+COOLDOWN_MIN = 0.7
+UPGRADE_AREA = 0.12
+AREA_MAX = 1.48
+FALLBACK_COINS = 20
 DASH_SPEED = 900
 DASH_DURATION = 0.15
 DASH_COOLDOWN_PLAYER = 2.0
 
-# Kill streaks: na zoveel kills achter elkaar komt er een tekst
+# Kill streaks: after this many kills in a row a text shows up
 STREAK_TIME = 1.5
-STREAK_TEXTS = {2: "DUBBELE KILL", 3: "DRIEDUBBEL", 5: "MULTI KILL", 10: "RAMPAGE", 25: "ONSTOPBAAR",
-                50: "GODLIKE", 100: "WAT IS DIT", 250: "BEL DE POLITIE"}
+STREAK_TEXTS = {2: "DOUBLE KILL", 3: "TRIPLE KILL", 5: "MULTI KILL", 10: "RAMPAGE", 25: "UNSTOPPABLE",
+                50: "GODLIKE", 100: "WHAT IS THIS", 250: "CALL THE POLICE"}
 
 # Random events
 EVENT_FIRST = 90
-EVENT_INTERVAL = 120
 
-# Dag en nacht, een hele dag duurt zoveel seconden
+# Day and night, a full day takes this many seconds
 DAY_LENGTH = 240
 NIGHT_DARKNESS = 150
 
-# Coins na een run
+# Coins after a run
 COINS_PER_KILLS = 10
 PLAYER_COLOR = (60, 120, 220)
 BULLET_COLOR = (250, 240, 120)
+
+# Online co-op
+NET_PORT = 50555
+SNAPSHOT_RATE = 30
+MAX_PLAYERS = 4
+# seconds to pick an upgrade, after that you get a random one
+CHOICE_TIME = 8
+REVIVE_TIME = 3
+REVIVE_RANGE = 60
+# you come back with this part of your max hp
+REVIVE_HP_PART = 0.5
+REVIVE_INVIS = 2.5
+# every extra player makes enemies come this much faster
+COOP_SPAWN_BONUS = 0.6
+# and a bit more hp, a team does a lot more damage
+COOP_HP_BONUS = 0.25
+COOP_BOSS_HP = 0.5
+COOP_COIN_BONUS = 0.25
+# standing close to a teammate gives "team spirit": faster weapons and some regen
+TEAM_RANGE = 260
+TEAM_COOLDOWN = 0.85
+TEAM_REGEN = 25
+# teammates close by get this part of the xp you pick up
+SHARED_XP = 0.4
+SHARED_XP_RANGE = 700
+MEDIC_TIME = 15
+# a boss picks someone new to chase every so many seconds
+BOSS_FOCUS_TIME = 6
+COOP_COLORS = [(110, 200, 255), (255, 140, 90), (140, 230, 120), (230, 130, 230)]

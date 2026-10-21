@@ -16,7 +16,7 @@ from settings import (
 
 
 def lattice(x, y, seed):
-    # vaste willekeurige waarde tussen 0 en 1 voor elk rasterpunt
+    # fixed random value between 0 and 1 for every grid point
     h = (x * 374761393 + y * 668265263 + seed * 1442695041) & 0xFFFFFFFF
     h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
     h = h ^ (h >> 16)
@@ -57,7 +57,7 @@ class Terrain:
 
     def height(self, x, y, octaves=TERRAIN_OCTAVES):
         base = fractal_noise(x / TERRAIN_SCALE, y / TERRAIN_SCALE, self.seed, octaves)
-        # bergen komen in groepjes voor, niet overal
+        # mountains come in groups, not everywhere
         mountain = value_noise(x / MOUNTAIN_SCALE, y / MOUNTAIN_SCALE, self.seed + 7)
         mountain = smooth(min(1, max(0, (mountain - 0.5) / 0.3)))
         height = base * 0.85 + mountain * 0.32 - 0.06

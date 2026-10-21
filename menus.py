@@ -2,17 +2,19 @@ import math
 
 import pygame
 
+import achievements
 import config
 import progress
 import saves
 import settings_menu
+import sound
 import sprites
 import ui
 from settings import W, H, DIFFICULTIES
 
 DIFFICULTY_KEYS = list(DIFFICULTIES.keys())
-YELLOW = (250, 220, 60)
-GREY = (180, 180, 190)
+YELLOW = ui.YELLOW
+GREY = ui.GREY
 PANEL = (30, 28, 45, 220)
 
 PERK_ICONS = {
@@ -34,14 +36,19 @@ def init_menu(bp, world, last_run=None):
         "selected": 1,
         "last_run": last_run,
         "bp": bp,
+        "shop_tab": 0,
         "shop_selected": 0,
+        "shop_scroll": 0,
+        "achievement_selected": 0,
         "message": "",
         "world": world,
         "menu_time": 0,
         "start": None,
+        "start_online": None,
         "menu_page": "main",
         "menu_selected": 0,
         "confirm_selected": 1,
+        "results_selected": 0,
         "run_info": saves.current_run_summary(),
         "continue": False,
         "slot_selected": saves.slot - 1,
@@ -49,7 +56,7 @@ def init_menu(bp, world, last_run=None):
     }
 
 
-# ---------- tekenhulpjes ----------
+# ---------- drawing helpers ----------
 
 def text_center(screen, text, size, color, y, x=W / 2):
     font = sprites.font(size)
@@ -81,22 +88,15 @@ def panel(screen, rect, border=(90, 90, 120), width=2):
     pygame.draw.rect(screen, border, rect, width, border_radius=10)
 
 
-def draw_background(screen, state, darkness=150):
-    t = state["menu_time"]
-    camera = pygame.Vector2(t * 30, t * 12)
-    state["world"].draw(screen, camera)
-    state["world"].draw_roofs(screen, camera)
-    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, darkness))
-    screen.blit(overlay, (0, 0))
-
-
-def draw_coins(screen, amount):
-    text = sprites.font(36).render(str(amount), True, (240, 200, 60))
-    x = W - text.get_width() - 20
-    screen.blit(text, (x, 26))
+def draw_coins(screen, amount, y=18):
+    """Coin counter in a little pill at the top right."""
+    image = sprites.font(32).render(str(amount), True, ui.COIN)
     coin = sprites.get("coin")
-    screen.blit(coin, (x - coin.get_width() - 8, 22))
+    width = image.get_width() + coin.get_width() + 30
+    rect = pygame.Rect(W - width - 16, y, width, 38)
+    ui.card(screen, rect, ui.tint(ui.COIN, 0.5, 255)[:3], radius=19)
+    screen.blit(coin, (rect.x + 10, rect.centery - coin.get_height() / 2))
+    screen.blit(image, (rect.right - image.get_width() - 12, rect.y + 9))
 
 
 def reward_icon(reward, time=0):
@@ -107,22 +107,14 @@ def reward_icon(reward, time=0):
     return sprites.scaled(sprites.get(PERK_ICONS.get(reward["effect"], "icon_luck")), 1.5)
 
 
-def move_selection(event, index, size, columns):
-    if event.key in (pygame.K_LEFT, pygame.K_a):
-        index -= 1
-    elif event.key in (pygame.K_RIGHT, pygame.K_d):
-        index += 1
-    elif event.key in (pygame.K_UP, pygame.K_w):
-        index -= columns
-    elif event.key in (pygame.K_DOWN, pygame.K_s):
-        index += columns
-    return max(0, min(size - 1, index))
+def format_time(seconds):
+    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
 
 
-# ---------- hoofdmenu ----------
+# ---------- main menu ----------
 
 DIFFICULTY_COLORS = {"easy": (120, 220, 130), "normal": (120, 190, 250), "hard": (250, 170, 70),
-                     "extreme": (240, 80, 90)}
+                     "extreme": (240, 80, 90), "nightmare": (190, 90, 240)}
 MENU_HOTKEYS = {pygame.K_k: "shop", pygame.K_a: "achievements"}
 
 
@@ -132,26 +124,27 @@ def open_screen(state, name):
 
 
 def menu_buttons(state):
-    """Lijst van (actie, tekst, kleine tekst, hoogte)."""
+    """List of (action, label, small text, height)."""
     buttons = []
     run = state["run_info"]
     if run:
         sub = f"{DIFFICULTIES[run['difficulty']]['name']} - {format_time(run['time'])}, level {run['level']}"
-        buttons.append(("continue", "Doorgaan", sub, 56))
-    buttons.append(("new", "Nieuwe run", None, 44))
-    buttons.append(("shop", "Winkel", None, 40))
+        buttons.append(("continue", "Continue", sub, 56))
+    buttons.append(("new", "New run", None, 44))
+    buttons.append(("multiplayer", "Multiplayer", None, 40))
+    buttons.append(("shop", "Shop", None, 40))
     buttons.append(("achievements", "Achievements", None, 40))
-    buttons.append(("settings", "Instellingen", None, 40))
-    buttons.append(("slots", "Wissel save", None, 40))
-    buttons.append(("quit", "Afsluiten", None, 40))
+    buttons.append(("settings", "Settings", None, 40))
+    buttons.append(("slots", "Switch save", None, 40))
+    buttons.append(("quit", "Quit", None, 40))
     return buttons
 
 
 def menu_rects(state):
     rects = []
-    y = 150
+    y = 160
     for button in menu_buttons(state):
-        rects.append(pygame.Rect(50, y, 320, button[3]))
+        rects.append(pygame.Rect(40, y, 320, button[3]))
         y += button[3] + 6
     return rects
 
@@ -159,8 +152,8 @@ def menu_rects(state):
 def difficulty_rects():
     rects = []
     for i in range(len(DIFFICULTY_KEYS)):
-        rects.append(pygame.Rect(W / 2 - 280, 150 + i * 86, 560, 74))
-    rects.append(pygame.Rect(W / 2 - 280, 150 + len(DIFFICULTY_KEYS) * 86 + 8, 560, 48))
+        rects.append(pygame.Rect(36 + i * 180, 150, 168, 350))
+    rects.append(pygame.Rect(W / 2 - 100, 528, 200, 44))
     return rects
 
 
@@ -200,24 +193,7 @@ def handle_menu_input(state, events):
         return
 
     if page == "difficulty":
-        number_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]
-        for event in events:
-            if event.type != pygame.KEYDOWN:
-                continue
-            if event.key == pygame.K_ESCAPE:
-                state["menu_page"] = "main"
-                return
-            if event.key in number_keys and number_keys.index(event.key) < len(DIFFICULTY_KEYS):
-                state["start"] = DIFFICULTY_KEYS[number_keys.index(event.key)]
-                return
-        if ui.back_clicked(events):
-            state["menu_page"] = "main"
-            return
-        state["selected"], chosen = ui.navigate(events, state["selected"], difficulty_rects())
-        if chosen == len(DIFFICULTY_KEYS):
-            state["menu_page"] = "main"
-        elif chosen is not None:
-            state["start"] = DIFFICULTY_KEYS[chosen]
+        handle_difficulty_input(state, events)
         return
 
     buttons = menu_buttons(state)
@@ -237,84 +213,196 @@ def handle_menu_input(state, events):
 
 
 def draw_menu(screen, state):
-    bp = state["bp"]
-    draw_background(screen, state, 120)
-    t = state["menu_time"]
+    ui.draw_background(screen, state, 110)
     if state["menu_page"] == "difficulty":
         draw_difficulty(screen, state)
         return
-    # donkere strook links achter de knoppen
-    strip = pygame.Surface((420, H), pygame.SRCALPHA)
-    strip.fill((8, 6, 18, 150))
-    screen.blit(strip, (0, 0))
+    t = state["menu_time"]
 
-    bob = math.sin(t * 2) * 4
-    ui.title(screen, "roguelike", 104, ui.WHITE, 40 + bob, 210)
-    ui.title(screen, f"Save {saves.slot}", 24, GREY, 116, 210)
+    # dark strip on the left behind the buttons
+    strip = pygame.Surface((400, H), pygame.SRCALPHA)
+    strip.fill((8, 6, 18, 170))
+    screen.blit(strip, (0, 0))
+    pygame.draw.line(screen, (60, 58, 85), (400, 0), (400, H))
+
+    ui.title(screen, "roguelike", 96, ui.WHITE, 46 + math.sin(t * 2) * 4, 200)
+    ui.badge(screen, f"Save {saves.slot}", (200, 118), GREY, "center", 20)
 
     rects = menu_rects(state)
     for i, (action, label, sub, _) in enumerate(menu_buttons(state)):
         accent = YELLOW
         if action == "continue":
-            accent = (120, 220, 130)
+            accent = ui.GREEN
         elif action == "quit":
-            accent = (240, 110, 110)
+            accent = ui.RED
         size = 32 if action in ("continue", "new") else 28
         ui.button(screen, rects[i], label, i == state["menu_selected"], accent, sub, size)
 
-    draw_coins(screen, bp["coins"])
+    draw_coins(screen, state["bp"]["coins"])
+    draw_hero_card(screen, state)
+    draw_stats_card(screen, state)
+    if state["last_run"]:
+        draw_last_run_card(screen, state["last_run"])
+    else:
+        draw_controls_card(screen)
 
-    # held in het midden van de rechterkant
-    hero = sprites.scaled(sprites.frame(progress.skin_sprite(bp), t, 4), 3)
-    sprites.draw_centered(screen, hero, (670, 200 + math.sin(t * 3) * 6))
-    totals = bp["totals"]
-    ui.card(screen, (470, 290, 400, 70), (70, 68, 95))
-    screen.blit(sprites.font(28).render(f"{totals.get('runs', 0)} runs gespeeld", True, YELLOW), (490, 298))
-    line = f"{totals.get('kills', 0)} kills in totaal, {len(bp['achievements'])} achievements"
-    screen.blit(sprites.font(22).render(line, True, GREY), (490, 330))
-
-    last_run = state["last_run"]
-    if last_run:
-        ui.card(screen, (470, 376, 400, 150), (240, 130, 130))
-        screen.blit(sprites.font(28).render("Laatste run", True, (240, 130, 130)), (490, 388))
-        lines = [
-            (f"{last_run['difficulty']} - {format_time(last_run['time'])}, level {last_run['level']}", ui.WHITE),
-            (f"{last_run['kills']} kills, +{last_run['coins']} coins", YELLOW),
-        ]
-        for name in last_run["achievements"][:2]:
-            lines.append((f"Achievement: {name}", (120, 230, 120)))
-        for i, (text, color) in enumerate(lines[:4]):
-            screen.blit(sprites.font(22).render(text, True, color), (490, 418 + i * 24))
-
-    hint = "Muis of pijltjes + Enter  -  K A sneltoetsen  -  F11 volledig scherm"
-    image = sprites.font(20).render(hint, True, GREY)
-    screen.blit(image, (W - image.get_width() - 20, H - 28))
+    ui.footer(screen, [("W/S", "Move"), ("Enter", "Select"), ("K", "Shop"), ("A", "Achievements"),
+                       ("F11", "Fullscreen")])
 
     if state["menu_page"] == "confirm_new":
-        ui.draw_confirm(screen, "Nieuwe run?", "Je opgeslagen run gaat verloren", state["confirm_selected"])
+        ui.draw_confirm(screen, "Start a new run?", "Your saved run will be lost", state["confirm_selected"])
     elif state["menu_page"] == "confirm_quit":
-        ui.draw_confirm(screen, "Afsluiten?", None, state["confirm_selected"])
+        ui.draw_confirm(screen, "Quit the game?", None, state["confirm_selected"])
+
+
+def draw_hero_card(screen, state):
+    bp = state["bp"]
+    t = state["menu_time"]
+    rect = pygame.Rect(440, 70, 490, 180)
+    ui.card(screen, rect, ui.BORDER, shadow=True)
+    center = (rect.x + 110, rect.centery + math.sin(t * 3) * 5)
+    sprites.draw_glow(screen, 70, (60, 50, 110), center)
+    screen.blit(sprites.shadow(60), (center[0] - 30, rect.centery + 42))
+    hero = sprites.scaled(sprites.frame(progress.skin_sprite(bp), t, 4), 3)
+    sprites.draw_centered(screen, hero, center)
+
+    x = rect.x + 220
+    ui.text(screen, "YOUR HERO", 20, ui.DIM, (x, rect.y + 22))
+    ui.text(screen, bp["skin"] or "Blue hero", 38, ui.WHITE, (x, rect.y + 44))
+    ui.text(screen, "Bullets", 20, ui.DIM, (x, rect.y + 92))
+    bullet = sprites.get(progress.bullet_sprite(bp))
+    sprites.draw_centered(screen, sprites.scaled(bullet, 1.5), (x + 12, rect.y + 126))
+    ui.text(screen, bp["bullet"] or "Standard bullets", 26, ui.GREY, (x + 30, rect.y + 116))
+    ui.text(screen, "Change your look in the shop", 20, ui.DIM, (x, rect.bottom - 30))
+
+
+def draw_stats_card(screen, state):
+    bp = state["bp"]
+    totals = bp["totals"]
+    rect = pygame.Rect(440, 264, 490, 96)
+    ui.card(screen, rect, ui.BORDER)
+    columns = [("Runs", totals.get("runs", 0)), ("Kills", totals.get("kills", 0)),
+               ("Elites", totals.get("elites", 0))]
+    for i, (label, value) in enumerate(columns):
+        x = rect.x + 24 + i * 100
+        ui.text(screen, label.upper(), 18, ui.DIM, (x, rect.y + 16))
+        ui.text(screen, value, 36, YELLOW, (x, rect.y + 36))
+    done = len(bp["achievements"])
+    total = len(achievements.ACHIEVEMENTS)
+    x = rect.x + 330
+    ui.text(screen, "ACHIEVEMENTS", 18, ui.DIM, (x, rect.y + 16))
+    ui.text(screen, f"{done} / {total}", 30, ui.WHITE, (x, rect.y + 36))
+    ui.progress_bar(screen, (x, rect.y + 66, 136, 10), done / total, YELLOW)
+
+
+def draw_last_run_card(screen, last_run):
+    rect = pygame.Rect(440, 374, 490, 170)
+    ui.card(screen, rect, ui.BORDER)
+    color = DIFFICULTY_COLORS.get(last_run["difficulty_key"], YELLOW)
+    pygame.draw.rect(screen, color, (rect.x, rect.y + 14, 4, rect.h - 28), border_radius=2)
+    ui.text(screen, "LAST RUN", 20, ui.DIM, (rect.x + 24, rect.y + 16))
+    ui.badge(screen, last_run["difficulty"], (rect.right - 20, rect.y + 14), color, "right")
+    stats = [("Time", format_time(last_run["time"])), ("Level", last_run["level"]),
+             ("Kills", last_run["kills"]), ("Coins", f"+{last_run['coins']}")]
+    for i, (label, value) in enumerate(stats):
+        x = rect.x + 24 + i * 116
+        ui.text(screen, label, 20, ui.GREY, (x, rect.y + 48))
+        ui.text(screen, value, 34, ui.COIN if label == "Coins" else ui.WHITE, (x, rect.y + 68))
+    y = rect.y + 112
+    for name in last_run["achievements"][:2]:
+        ui.check_mark(screen, (rect.x + 34, y + 9), ui.GREEN, 6)
+        ui.text(screen, name, 22, ui.GREEN, (rect.x + 50, y + 1))
+        y += 24
+
+
+def draw_controls_card(screen):
+    rect = pygame.Rect(440, 374, 490, 170)
+    ui.card(screen, rect, ui.BORDER)
+    ui.text(screen, "HOW TO PLAY", 20, ui.DIM, (rect.x + 24, rect.y + 16))
+    rows = [("WASD", "Move around, you shoot automatically"),
+            ("Space", "Dash (once you have the upgrade)"),
+            ("1 2 3", "Pick an upgrade, or click it"),
+            ("Esc", "Pause the game")]
+    for i, (key, label) in enumerate(rows):
+        y = rect.y + 46 + i * 29
+        ui.keycap(screen, key, (rect.x + 24, y))
+        ui.text(screen, label, 22, ui.GREY, (rect.x + 96, y + 3))
+
+
+# ---------- choose difficulty ----------
+
+def handle_difficulty_input(state, events):
+    number_keys = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5]
+    count = len(DIFFICULTY_KEYS) + 1
+    for event in events:
+        if event.type != pygame.KEYDOWN:
+            continue
+        if event.key == pygame.K_ESCAPE:
+            state["menu_page"] = "main"
+            return
+        if event.key in number_keys and number_keys.index(event.key) < len(DIFFICULTY_KEYS):
+            state["start"] = DIFFICULTY_KEYS[number_keys.index(event.key)]
+            return
+        if event.key in (pygame.K_LEFT, pygame.K_a):
+            state["selected"] = (state["selected"] - 1) % count
+        elif event.key in (pygame.K_RIGHT, pygame.K_d):
+            state["selected"] = (state["selected"] + 1) % count
+        if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+            sound.play("menu_move")
+    if ui.back_clicked(events):
+        state["menu_page"] = "main"
+        return
+    state["selected"], chosen = ui.navigate(events, state["selected"], difficulty_rects())
+    if chosen == len(DIFFICULTY_KEYS):
+        state["menu_page"] = "main"
+    elif chosen is not None:
+        state["start"] = DIFFICULTY_KEYS[chosen]
 
 
 def draw_difficulty(screen, state):
-    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-    overlay.fill((8, 6, 18, 100))
-    screen.blit(overlay, (0, 0))
-    ui.title(screen, "Kies moeilijkheid", 64, ui.WHITE, 70)
+    ui.darken(screen, 110)
+    ui.title(screen, "Choose difficulty", 64, ui.WHITE, 56)
+    text_center(screen, "Harder means more enemies, more HP and fewer lives", 24, GREY, 112)
     rects = difficulty_rects()
+    heart = sprites.scaled(sprites.get("heart"), 0.6)
     for i, key in enumerate(DIFFICULTY_KEYS):
         info = DIFFICULTIES[key]
-        sub = f"{info['player_hp']} levens, vijanden x{info['enemy_hp']} HP en x{info['enemy_speed']} snelheid"
-        if info["enemy_damage"] > 1:
-            sub += f", {info['enemy_damage']} schade"
-        ui.button(screen, rects[i], f"{i + 1}. {info['name']}", i == state["selected"],
-                  DIFFICULTY_COLORS.get(key, YELLOW), sub, 34)
-    ui.button(screen, rects[-1], "Terug", state["selected"] == len(DIFFICULTY_KEYS), size=28)
+        color = DIFFICULTY_COLORS.get(key, YELLOW)
+        rect = rects[i].copy()
+        active = i == state["selected"]
+        if active:
+            rect.y -= 8
+            ui.glow(screen, rect, color, spread=8)
+            ui.card(screen, rect, color, ui.tint(color, 0.22), shadow=True)
+        else:
+            ui.card(screen, rect, ui.BORDER, shadow=True)
+        pygame.draw.rect(screen, color, (rect.x, rect.y, rect.w, 8),
+                         border_top_left_radius=12, border_top_right_radius=12)
+        ui.keycap(screen, str(i + 1), (rect.x + 12, rect.y + 20))
+        ui.text(screen, info["name"], 34, color if active else ui.WHITE, (rect.centerx, rect.y + 58), "center")
+
+        y = rect.y + 110
+        ui.text(screen, "Lives", 20, ui.DIM, (rect.x + 14, y))
+        for h in range(info["player_hp"]):
+            screen.blit(heart, (rect.x + 14 + h * (heart.get_width() + 2), y + 20))
+        rows = [("Enemy HP", f"x{info['enemy_hp']}"),
+                ("Enemy speed", f"x{info['enemy_speed']}"),
+                ("Spawn rate", f"x{1 / info['spawn']:.1f}"),
+                ("Damage taken", str(info["enemy_damage"]))]
+        y += 58
+        for label, value in rows:
+            ui.text(screen, label, 20, ui.DIM, (rect.x + 14, y))
+            ui.text(screen, value, 24, ui.WHITE, (rect.right - 14, y - 2), "right")
+            y += 30
+        if active:
+            ui.center_button(screen, (rect.x + 14, rect.bottom - 52, rect.w - 28, 38), "Play", True, color, 26)
+
+    ui.center_button(screen, rects[-1], "Back", state["selected"] == len(DIFFICULTY_KEYS), GREY)
     ui.back_button(screen)
-    text_center(screen, "1-4 start meteen, Esc: terug", 22, GREY, H - 34)
+    ui.footer(screen, [("A/D", "Choose"), ("Enter", "Play"), ("1-5", "Quick start"), ("Esc", "Back")])
 
 
-# ---------- saves kiezen ----------
+# ---------- choose a save ----------
 
 def init_slots(world):
     return {
@@ -336,8 +424,8 @@ def slot_rects():
     deletes = []
     for i in range(saves.SLOTS):
         x = 75 + i * 280
-        cards.append(pygame.Rect(x, 160, 250, 300))
-        deletes.append(pygame.Rect(x + 40, 474, 170, 40))
+        cards.append(pygame.Rect(x, 150, 250, 310))
+        deletes.append(pygame.Rect(x + 40, 480, 170, 40))
     return cards, deletes
 
 
@@ -355,7 +443,7 @@ def handle_slots_input(state, events):
         if answer:
             n = state["slot_confirm"]
             saves.delete_slot(n)
-            # de save waar je in zat is weg, dus eerst een nieuwe kiezen
+            # the save you were in is gone, so pick a new one first
             if state["bp"] is not None and n == saves.slot:
                 state["bp"] = None
                 config.set("last_slot", None)
@@ -376,7 +464,7 @@ def handle_slots_input(state, events):
             else:
                 state["running"] = False
             return
-        if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE) and saves.slot_info(state["slot_selected"] + 1):
+        if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE, pygame.K_x) and saves.slot_info(state["slot_selected"] + 1):
             state["slot_confirm"] = state["slot_selected"] + 1
             state["confirm_selected"] = 1
             return
@@ -392,47 +480,60 @@ def handle_slots_input(state, events):
 
 
 def draw_slots(screen, state):
-    draw_background(screen, state, 170)
-    ui.title(screen, "Kies een save", 72, ui.WHITE, 60)
+    ui.draw_background(screen, state, 170)
+    ui.title(screen, "Choose a save", 64, ui.WHITE, 50)
+    text_center(screen, "Every save has its own coins, unlocks and run", 24, GREY, 104)
     cards, deletes = slot_rects()
+    coin = sprites.get("coin")
     for i in range(saves.SLOTS):
         info = saves.slot_info(i + 1)
-        rect = cards[i]
+        rect = cards[i].copy()
         active = i == state["slot_selected"]
         if active:
-            ui.card(screen, rect, YELLOW, ui.tint(YELLOW, 0.2))
+            rect.y -= 6
+            ui.glow(screen, rect, YELLOW)
+            ui.card(screen, rect, YELLOW, ui.tint(YELLOW, 0.18), shadow=True)
         else:
-            ui.card(screen, rect, (70, 68, 95))
-        text_center(screen, f"Save {i + 1}", 44, YELLOW if active else ui.WHITE, rect.y + 20, rect.centerx)
+            ui.card(screen, rect, ui.BORDER, shadow=True)
+        ui.text(screen, f"Save {i + 1}", 44, YELLOW if active else ui.WHITE, (rect.centerx, rect.y + 22), "center")
         if state["bp"] is not None and i + 1 == saves.slot:
-            text_center(screen, "Huidige save", 20, (120, 220, 130), rect.y + 62, rect.centerx)
+            ui.badge(screen, "Current", (rect.centerx, rect.y + 62), ui.GREEN, "center")
+
         if info is None:
-            text_center(screen, "Nieuw spel", 32, GREY, rect.centery - 10, rect.centerx)
+            pygame.draw.circle(screen, ui.BORDER, (rect.centerx, rect.centery + 4), 34, 3)
+            pygame.draw.line(screen, GREY, (rect.centerx - 14, rect.centery + 4), (rect.centerx + 14, rect.centery + 4), 4)
+            pygame.draw.line(screen, GREY, (rect.centerx, rect.centery - 10), (rect.centerx, rect.centery + 18), 4)
+            ui.text(screen, "New game", 28, GREY, (rect.centerx, rect.centery + 54), "center")
             continue
-        lines = [
-            (f"{info['coins']} coins", (240, 200, 60)),
-            (f"{info['runs']} runs gespeeld", ui.WHITE),
-            (f"{info['achievements']} achievements", GREY),
-            (f"Gespeeld: {info['last_played']}", GREY),
-        ]
-        for j, (text, color) in enumerate(lines):
-            text_center(screen, text, 26, color, rect.y + 100 + j * 30, rect.centerx)
+
+        y = rect.y + 102
+        screen.blit(coin, (rect.x + 24, y - 2))
+        ui.text(screen, info["coins"], 30, ui.COIN, (rect.x + 30 + coin.get_width(), y))
+        lines = [("Runs played", info["runs"]), ("Achievements", info["achievements"]),
+                 ("Last played", info["last_played"])]
+        y += 42
+        for label, value in lines:
+            ui.text(screen, label, 20, ui.DIM, (rect.x + 24, y))
+            ui.text(screen, value, 22, ui.WHITE, (rect.right - 24, y), "right")
+            y += 28
         if info["run"]:
             run = info["run"]
-            text = f"Run bezig: {format_time(run['time'])}, lvl {run['level']}"
-            text_center(screen, text, 22, (120, 220, 130), rect.bottom - 34, rect.centerx)
+            label = f"Run: {format_time(run['time'])}, lvl {run['level']}"
+            ui.badge(screen, label, (rect.centerx, rect.bottom - 40), ui.GREEN, "center", 20)
         hover = deletes[i].collidepoint(pygame.mouse.get_pos())
-        ui.button(screen, deletes[i], "Verwijderen", hover, (240, 110, 110), size=24)
+        ui.center_button(screen, deletes[i], "Delete", hover, ui.RED, 24)
 
     if state["bp"] is not None:
         ui.back_button(screen)
-    text_center(screen, "Klik of Enter: spelen, Delete: verwijderen, Esc: terug", 22, GREY, H - 40)
+    hints = [("A/D", "Choose"), ("Enter", "Play"), ("Del", "Delete")]
+    hints.append(("Esc", "Back" if state["bp"] is not None else "Quit"))
+    ui.footer(screen, hints)
     if state["slot_confirm"] is not None:
-        ui.draw_confirm(screen, f"Save {state['slot_confirm']} verwijderen?", "Dit kan je niet terugdraaien",
+        ui.draw_confirm(screen, f"Delete save {state['slot_confirm']}?", "This can't be undone",
                         state["confirm_selected"])
 
 
-# ---------- instellingen ----------
+# ---------- settings ----------
 
 def handle_settings_input(state, events):
     if settings_menu.handle(events):
@@ -440,82 +541,79 @@ def handle_settings_input(state, events):
 
 
 def draw_settings(screen, state):
-    draw_background(screen, state, 170)
+    ui.draw_background(screen, state, 170)
     settings_menu.draw(screen)
 
 
-def format_time(seconds):
-    return f"{int(seconds) // 60}:{int(seconds) % 60:02d}"
+# ---------- after a run ----------
+
+def results_rects():
+    return [pygame.Rect(W / 2 - 230, 486, 220, 52), pygame.Rect(W / 2 + 10, 486, 220, 52)]
 
 
-# ---------- winkel ----------
-
-SHOP_COLUMNS = 5
-SHOP_ROWS = 3
-
-
-def handle_shop_input(state, events):
-    bp = state["bp"]
-    items = progress.SHOP_ITEMS
+def handle_results_input(state, events):
     for event in events:
         if event.type != pygame.KEYDOWN:
             continue
-        if event.key in (pygame.K_ESCAPE, pygame.K_k):
+        if event.key == pygame.K_ESCAPE:
             state["screen"] = "menu"
-        elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-            state["message"] = progress.buy_item(bp, items[state["shop_selected"]])
-            progress.save(bp)
-        else:
-            state["shop_selected"] = move_selection(event, state["shop_selected"], len(items), SHOP_COLUMNS)
+            return
+        if event.key == pygame.K_r:
+            state["start"] = state["last_run"]["difficulty_key"]
+            return
+        if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+            state["results_selected"] = 1 - state["results_selected"]
+            sound.play("menu_move")
+    state["results_selected"], chosen = ui.navigate(events, state["results_selected"], results_rects())
+    if chosen == 0:
+        state["start"] = state["last_run"]["difficulty_key"]
+    elif chosen == 1:
+        state["screen"] = "menu"
 
 
-def draw_shop(screen, state):
-    bp = state["bp"]
-    draw_background(screen, state, 190)
-    text_center(screen, "Winkel", 64, YELLOW, 20)
-    draw_coins(screen, bp["coins"])
+def draw_results(screen, state):
+    ui.draw_background(screen, state, 170)
+    run = state["last_run"]
+    t = state["menu_time"]
+    if run.get("won"):
+        ui.title(screen, "YOU SURVIVED!", 88, ui.GREEN, 40 + math.sin(t * 2) * 3)
+    elif run["died"]:
+        ui.title(screen, "GAME OVER", 88, ui.RED, 40 + math.sin(t * 2) * 3)
+    else:
+        ui.title(screen, "RUN ENDED", 88, YELLOW, 40 + math.sin(t * 2) * 3)
+    color = DIFFICULTY_COLORS.get(run["difficulty_key"], YELLOW)
+    ui.badge(screen, run["difficulty"], (W / 2, 120), color, "center", 22)
+    if run.get("note"):
+        ui.text(screen, run["note"], 20, ui.RED, (W / 2, 147), "center", True)
 
-    items = progress.SHOP_ITEMS
-    selected_row = state["shop_selected"] // SHOP_COLUMNS
-    last_row = (len(items) - 1) // SHOP_COLUMNS
-    first_row = min(max(0, selected_row - 1), max(0, last_row - SHOP_ROWS + 1))
-    for i, item in enumerate(items):
-        row = i // SHOP_COLUMNS - first_row
-        if row < 0 or row >= SHOP_ROWS:
-            continue
-        x = 45 + (i % SHOP_COLUMNS) * 175
-        y = 96 + row * 150
-        selected = i == state["shop_selected"]
-        panel(screen, (x, y, 160, 140), YELLOW if selected else (90, 90, 120), 4 if selected else 2)
-        sprites.draw_centered(screen, reward_icon(item, state["menu_time"]), (x + 80, y + 50))
-        text_center(screen, item["name"], 20, (255, 255, 255), y + 92, x + 80)
+    rect = pygame.Rect(W / 2 - 300, 160, 600, 300)
+    ui.card(screen, rect, ui.BORDER, shadow=True)
+    stats = [("Survived", format_time(run["time"]), ui.WHITE), ("Level", run["level"], ui.WHITE),
+             ("Kills", run["kills"], ui.WHITE), ("Coins earned", f"+{run['coins']}", ui.COIN)]
+    for i, (label, value, value_color) in enumerate(stats):
+        x = rect.x + 75 + i * 150
+        ui.text(screen, label.upper(), 18, ui.DIM, (x, rect.y + 26), "center")
+        ui.text(screen, value, 48, value_color, (x, rect.y + 50), "center")
+    pygame.draw.line(screen, ui.BORDER, (rect.x + 30, rect.y + 116), (rect.right - 30, rect.y + 116))
 
-        equipped = item["name"] in (bp["skin"], bp["bullet"])
-        if equipped:
-            status, color = "Uitgerust", (120, 220, 120)
-        elif progress.owns(bp, item):
-            status, color = "In bezit", (180, 220, 180)
-        elif item["achievement"]:
-            status, color = "Achievement", (230, 150, 90)
-        else:
-            status, color = f"{item['price']} coins", (240, 200, 60)
-        text_center(screen, status, 20, color, y + 114, x + 80)
+    ui.text(screen, "NEW ACHIEVEMENTS", 18, ui.DIM, (rect.x + 30, rect.y + 134))
+    if not run["achievements"]:
+        ui.text(screen, "None this time", 24, ui.GREY, (rect.x + 30, rect.y + 160))
+    for i, name in enumerate(run["achievements"][:4]):
+        y = rect.y + 160 + i * 30
+        ui.check_mark(screen, (rect.x + 40, y + 9), ui.GREEN, 7)
+        ui.text(screen, name, 26, ui.GREEN, (rect.x + 58, y))
+    ui.text(screen, f"Total coins: {state['bp']['coins']}", 22, ui.GREY, (rect.right - 30, rect.bottom - 34), "right")
 
-    # klein balkje dat laat zien waar je in de lijst zit
-    if last_row >= SHOP_ROWS:
-        height = 440 * SHOP_ROWS / (last_row + 1)
-        top = 96 + 440 * first_row / (last_row + 1)
-        pygame.draw.rect(screen, (50, 50, 70), (W - 30, 96, 8, 440), border_radius=4)
-        pygame.draw.rect(screen, GREY, (W - 30, top, 8, height), border_radius=4)
-
-    text_center(screen, "Pijltjes: kiezen, Enter: kopen of uitrusten, Esc: terug", 24, GREY, 552)
-    if state["message"]:
-        text_center(screen, state["message"], 28, (240, 130, 130), 590)
+    play, menu = results_rects()
+    ui.center_button(screen, play, "Play again", state["results_selected"] == 0, ui.GREEN)
+    ui.center_button(screen, menu, "Main menu", state["results_selected"] == 1, GREY)
+    ui.footer(screen, [("A/D", "Choose"), ("Enter", "Select"), ("R", "Play again"), ("Esc", "Main menu")])
 
 
 SCREENS = {
     "menu": (handle_menu_input, draw_menu),
-    "shop": (handle_shop_input, draw_shop),
     "slots": (handle_slots_input, draw_slots),
     "settings": (handle_settings_input, draw_settings),
+    "results": (handle_results_input, draw_results),
 }

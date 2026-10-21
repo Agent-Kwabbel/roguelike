@@ -6,7 +6,7 @@ import pygame
 import sprites
 from orb import Orb
 from pickup import Pickup
-from settings import TILE, WALL, ROOF_FADE, BUILDINGS
+from settings import TILE, WALL, ROOF_FADE, ROOF_NEAR_ALPHA, ROOF_NEAR_RANGE, BUILDINGS
 
 OUTLINE = (28, 22, 38)
 
@@ -22,7 +22,7 @@ class Building:
         self.stats = stats
         self.tiles_w, self.tiles_h = stats["size"]
         self.rect = pygame.Rect(x, y, self.tiles_w * TILE, self.tiles_h * TILE)
-        # deur zit altijd in de onderste muur, niet in een hoek
+        # the door is always in the bottom wall, never in a corner
         self.door_tile = rng.randrange(1, self.tiles_w - 1)
         self.door_x = x + self.door_tile * TILE + TILE / 2
         self.walls = self.make_walls(rng)
@@ -30,7 +30,7 @@ class Building:
         free = []
         for tx in range(self.tiles_w):
             for ty in range(self.tiles_h):
-                # voor de deur vrij laten zodat je naar binnen kan
+                # keep the space in front of the door free so you can get in
                 if tx == self.door_tile and ty == self.tiles_h - 1:
                     continue
                 free.append((tx, ty))
@@ -59,7 +59,7 @@ class Building:
             walls.append(pygame.Rect(x, y + j * TILE, WALL, TILE))
             walls.append(pygame.Rect(self.rect.right - WALL, y + j * TILE, WALL, TILE))
         if self.kind == "ruin":
-            # ruines zijn half ingestort
+            # ruins are half collapsed
             walls = [w for w in walls if rng.random() > 0.3]
         return walls
 
@@ -70,7 +70,7 @@ class Building:
         width, height = roof.size
         middle = height // 2
         surface.fill(color)
-        # onderste helft iets donkerder, alsof het dak schuin afloopt
+        # bottom half a bit darker, like the roof slopes down
         pygame.draw.rect(surface, darker(color, 20), (0, middle, width, height - middle))
         for row, line_y in enumerate(range(10, height, 12)):
             pygame.draw.line(surface, darker(color), (0, line_y), (width, line_y), 2)
@@ -82,8 +82,24 @@ class Building:
             cx = rng.randrange(20, width - 40)
             pygame.draw.rect(surface, (150, 150, 160), (cx, 10, 20, 24))
             pygame.draw.rect(surface, OUTLINE, (cx, 10, 20, 24), 3)
+        self.draw_front(surface, width, height)
         pygame.draw.rect(surface, OUTLINE, (0, 0, width, height), 3)
         return surface
+
+    def draw_front(self, surface, width, height):
+        # front wall with the door, so you can see from outside where to get in
+        wall = self.stats["wall"]
+        front = 16
+        pygame.draw.rect(surface, wall, (0, height - front, width, front))
+        pygame.draw.line(surface, darker(wall), (0, height - front), (width, height - front), 3)
+        door_x = 8 + self.door_tile * TILE + TILE // 2
+        pygame.draw.rect(surface, darker(self.stats["roof"], 50), (door_x - 30, height - front - 10, 60, 10))
+        pygame.draw.rect(surface, OUTLINE, (door_x - 30, height - front - 10, 60, 10), 2)
+        pygame.draw.rect(surface, (40, 28, 30), (door_x - 18, height - front - 2, 36, front + 2))
+        pygame.draw.rect(surface, (70, 50, 45), (door_x - 18, height - front - 2, 36, front + 2), 2)
+        # little lamp next to the door
+        pygame.draw.circle(surface, (255, 220, 120), (door_x + 26, height - front + 6), 4)
+        pygame.draw.circle(surface, OUTLINE, (door_x + 26, height - front + 6), 4, 1)
 
     def tile_center(self, tile):
         return pygame.Vector2(self.rect.x + tile[0] * TILE + TILE / 2, self.rect.y + tile[1] * TILE + TILE / 2)
@@ -100,7 +116,9 @@ class Building:
             pos = self.tile_center(tile) - offset
             sprites.draw_centered(surface, sprites.get(name), pos)
 
-        # eerst alle randjes, dan de muren erover zodat stukken aan elkaar vast lijken
+        self.draw_path(surface, left, top)
+
+        # first all the edges, then the walls on top so the pieces look connected
         color = self.stats["wall"]
         for wall in self.walls:
             rect = wall.move(-offset[0], -offset[1])
@@ -110,14 +128,37 @@ class Building:
             pygame.draw.rect(surface, color, rect)
             pygame.draw.line(surface, darker(color), (rect.left, rect.bottom - 2), (rect.right - 1, rect.bottom - 2), 3)
 
+    def draw_path(self, surface, left, top):
+        # stepping stones from the door outwards
+        rng = random.Random(hash(self.rect.topleft))
+        door_x = left + self.door_tile * TILE + TILE // 2
+        bottom = top + self.rect.height
+        pygame.draw.rect(surface, (150, 115, 78), (door_x - 20, bottom - 4, 40, TILE - 8), border_radius=8)
+        for i in range(3):
+            x = door_x + rng.randint(-8, 8)
+            y = bottom + 8 + i * 18
+            stone = pygame.Rect(x - 10, y - 6, 20, 12)
+            pygame.draw.ellipse(surface, OUTLINE, stone.inflate(4, 4))
+            pygame.draw.ellipse(surface, (165, 160, 165), stone)
+            pygame.draw.ellipse(surface, (195, 190, 195), (stone.x + 3, stone.y + 2, 9, 4))
+
+    def path_rect(self):
+        return pygame.Rect(self.door_x - 28, self.rect.bottom, 56, TILE)
+
     def is_inside(self, pos):
         return self.rect.collidepoint(pos)
 
     def update(self, dt, player_pos):
         if self.is_inside(player_pos):
-            self.roof_alpha = max(0, self.roof_alpha - ROOF_FADE * dt)
+            target = 0
+        elif self.rect.inflate(ROOF_NEAR_RANGE * 2, ROOF_NEAR_RANGE * 2).collidepoint(player_pos):
+            target = ROOF_NEAR_ALPHA
         else:
-            self.roof_alpha = min(255, self.roof_alpha + ROOF_FADE * dt)
+            target = 255
+        if self.roof_alpha > target:
+            self.roof_alpha = max(target, self.roof_alpha - ROOF_FADE * dt)
+        else:
+            self.roof_alpha = min(target, self.roof_alpha + ROOF_FADE * dt)
 
     def draw_roof(self, screen, camera):
         if self.roof is None or self.roof_alpha <= 0:
@@ -150,13 +191,13 @@ class Building:
         return pickups, orbs
 
     def path_target(self, pos, target):
-        """Waar een vijand heen moet lopen om via de deur bij de speler te komen."""
+        """Where an enemy should walk to reach the player through the door."""
         if self.is_inside(pos) or not self.is_inside(target):
             return target
         left = self.rect.left - 40
         right = self.rect.right + 40
         below = self.rect.bottom + 40
-        # recht onder de deur, dan recht naar binnen lopen
+        # straight below the door, then walk straight in
         if abs(pos.x - self.door_x) < 16 and pos.y > self.rect.bottom - 20:
             return pygame.Vector2(self.door_x, self.rect.bottom - 40)
         if pos.y < self.rect.bottom:
@@ -180,7 +221,7 @@ def push_out(pos, radius, walls):
             pos.x += dx / distance * (radius - distance)
             pos.y += dy / distance * (radius - distance)
         else:
-            # midden zit in de muur, kortste kant eruit
+            # center is inside the wall, take the shortest way out
             gaps = [pos.x - wall.left, wall.right - pos.x, pos.y - wall.top, wall.bottom - pos.y]
             smallest = min(gaps)
             if smallest == gaps[0]:

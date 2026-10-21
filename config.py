@@ -7,7 +7,11 @@ DEFAULTS = {
     "fullscreen": True,
     "screen_shake": True,
     "show_fps": False,
+    "effects": True,
+    "music_volume": 6,
+    "sound_volume": 8,
     "last_slot": None,
+    "last_ip": "",
 }
 
 values = dict(DEFAULTS)

@@ -1,4 +1,4 @@
-# Maakt alle pixel-art sprites in assets/. Draai met: uv run tools/make_sprites.py
+# Makes all pixel-art sprites in assets/. Run with: uv run tools/make_sprites.py
 import os
 import random
 
@@ -45,7 +45,7 @@ def save_frames(body, legs_a, legs_b, palette, folder, name, scale):
     save_grid(body + legs_b, palette, folder, name + "_1", scale)
 
 
-# ---------- speler ----------
+# ---------- player ----------
 
 LEGS_A = [
     "....oLLooLLo....",
@@ -170,7 +170,7 @@ SKINS = {
     "skin_ninja": (HOOD, {"H": (35, 35, 45), "S": SKIN, "E": DARK, "B": (40, 40, 50), "A": (210, 40, 40), "L": (30, 30, 40)}),
 }
 
-# ---------- vijanden ----------
+# ---------- enemies ----------
 
 SLIME_0 = [
     "................",
@@ -310,7 +310,7 @@ BOSS = [
     ".......oooo.oooo......",
 ]
 
-# ---------- kogels en wapens ----------
+# ---------- bullets and weapons ----------
 
 BOLT = [
     "..oo..",
@@ -455,7 +455,7 @@ CHEST = [
     ".oooooooooooo.",
 ]
 
-# ---------- decoratie ----------
+# ---------- decoration ----------
 
 ROCK = [
     "....oooo....",
@@ -656,7 +656,7 @@ WELL = [
     ".oooooooooo.",
 ]
 
-# ---------- iconen ----------
+# ---------- icons ----------
 
 ICONS = {
     "icon_damage": ([
@@ -794,7 +794,7 @@ ICONS = {
 }
 
 
-# ---------- tegels ----------
+# ---------- tiles ----------
 
 def speckled_tile(base, specks, seed, flowers=0):
     rng = random.Random(seed)
@@ -803,14 +803,15 @@ def speckled_tile(base, specks, seed, flowers=0):
     for color, count in specks:
         for _ in range(count):
             tile.set_at((rng.randrange(16), rng.randrange(16)), color)
-    # grassprietjes
+    # grass blades, with a light tip
     if base[1] > base[0]:
-        for _ in range(4):
+        for _ in range(6):
             x = rng.randrange(1, 15)
-            y = rng.randrange(1, 15)
+            y = rng.randrange(2, 15)
             tile.set_at((x, y), (55, 115, 58))
             tile.set_at((x - 1, y - 1), (55, 115, 58))
             tile.set_at((x + 1, y - 1), (55, 115, 58))
+            tile.set_at((x + 1, y - 2), (110, 182, 98))
     colors = [(250, 250, 250), (255, 220, 70), (240, 120, 180), (150, 170, 255)]
     for _ in range(flowers):
         x = rng.randrange(1, 15)
@@ -845,7 +846,7 @@ def stone_tile(base, line, specks, seed):
     for color, count in specks:
         for _ in range(count):
             tile.set_at((rng.randrange(16), rng.randrange(16)), color)
-    # stenen in een metselverband
+    # stones in a brick pattern
     for x in range(16):
         tile.set_at((x, 7), line)
         tile.set_at((x, 15), line)
@@ -861,7 +862,7 @@ def water_tile(base, ripple, seed):
     rng = random.Random(seed)
     tile = pygame.Surface((16, 16))
     tile.fill(base)
-    # korte golfjes
+    # short little waves
     for _ in range(5):
         x = rng.randrange(0, 13)
         y = rng.randrange(1, 15)
@@ -872,8 +873,8 @@ def water_tile(base, ripple, seed):
 
 def make_tiles():
     grass = (72, 142, 72)
-    grass_specks = [((64, 128, 64), 22), ((86, 158, 82), 16)]
-    for i in range(3):
+    grass_specks = [((64, 128, 64), 22), ((86, 158, 82), 16), ((78, 150, 70), 12), ((100, 168, 88), 5)]
+    for i in range(4):
         save(speckled_tile(grass, grass_specks, i + 1), "tiles", f"grass_{i}", 4)
     save(speckled_tile(grass, grass_specks, 10, flowers=3), "tiles", "flowers", 4)
     dirt_specks = [((125, 92, 60), 26), ((158, 122, 84), 18), ((110, 110, 105), 4)]
@@ -905,7 +906,7 @@ def bolt_palette(white, light, color):
     return {"W": white, "L": light, "C": color}
 
 
-# ---------- nieuwe vijanden, wapens en winkel spullen ----------
+# ---------- new enemies, weapons and shop items ----------
 
 GHOST_BODY = [
     "................",
@@ -1192,6 +1193,48 @@ def make_extra():
     save_grid(POTION, {"C": (150, 100, 50), "W": (230, 250, 230), "P": (120, 230, 120), "D": (60, 160, 80)}, "items", "potion", 3)
 
 
+def make_team():
+    """Things you can only unlock by playing online."""
+    save_frames(HERO, LEGS_A, LEGS_B, hero_palette((240, 130, 40), (110, 200, 255), (60, 40, 30), (40, 60, 110)),
+                "players", "skin_team", 3)
+    save_grid(BOLT, bolt_palette((255, 255, 255), (110, 220, 255), (240, 130, 40)), "projectiles", "bullet_team", 3)
+
+
+def make_late():
+    """Enemies and bosses for the later phases of a run."""
+    knight = {"H": (160, 165, 180), "A": (230, 60, 60), "V": (60, 60, 75), "E": (255, 200, 60), "B": (110, 115, 135),
+              "S": (190, 195, 210), "L": (70, 70, 85)}
+    save_frames(KNIGHT, LEGS_A, LEGS_B, knight, "enemies", "knight", 3)
+
+    mage = {"H": (110, 50, 170), "A": (255, 210, 80), "S": (200, 180, 220), "E": (255, 80, 200), "W": (220, 200, 240),
+            "B": (70, 30, 110), "L": (50, 25, 80)}
+    save_frames(WIZARD, LEGS_A, LEGS_B, mage, "enemies", "mage", 3)
+
+    lava = {"G": (240, 110, 40), "H": (255, 220, 120), "E": DARK, "M": (120, 30, 20), "D": (190, 60, 30)}
+    save_grid(SLIME_0, lava, "enemies", "lava_slime_0", 3)
+    save_grid(SLIME_1, lava, "enemies", "lava_slime_1", 3)
+
+    wraith = {"W": (120, 30, 50), "L": (70, 15, 30), "E": (255, 200, 80), "M": (30, 10, 20)}
+    save_grid(GHOST_BODY + GHOST_TAIL_A, wraith, "enemies", "wraith_0", 3)
+    save_grid(GHOST_BODY[1:] + GHOST_TAIL_B + ["................"], wraith, "enemies", "wraith_1", 3)
+
+    reaper = {"W": (40, 30, 50), "L": (20, 15, 30), "E": (255, 40, 40), "M": (120, 20, 30)}
+    save_grid(GHOST_BODY + GHOST_TAIL_A, reaper, "enemies", "reaper_0", 6)
+    save_grid(GHOST_BODY[1:] + GHOST_TAIL_B + ["................"], reaper, "enemies", "reaper_1", 6)
+
+    crystal = {"R": (90, 200, 230), "L": (200, 245, 255), "D": (40, 120, 170), "C": (255, 255, 255), "P": (180, 90, 255)}
+    save_frames(GOLEM, GOLEM_LEGS_A, GOLEM_LEGS_B, crystal, "enemies", "crystal_golem", 4)
+    save_frames(GOLEM, GOLEM_LEGS_A, GOLEM_LEGS_B, crystal, "enemies", "mini_golem", 2)
+
+    golem_king = {"R": (120, 100, 80), "L": (200, 180, 140), "D": (70, 55, 45), "C": (255, 120, 40), "P": (255, 200, 60)}
+    save_frames(CROWN + GOLEM[2:], GOLEM_LEGS_A, GOLEM_LEGS_B, golem_king | {"Y": (255, 215, 60)}, "enemies",
+                "golem_king", 5)
+
+    bone_lord = {"H": (40, 30, 50), "S": (225, 225, 210), "E": (120, 255, 120), "B": (70, 50, 90), "A": (225, 225, 210),
+                 "L": (30, 20, 40), "Y": (255, 215, 60)}
+    save_frames(CROWN + HOOD[2:], LEGS_A, LEGS_B, bone_lord, "enemies", "bone_lord", 5)
+
+
 def main():
     pygame.init()
 
@@ -1276,6 +1319,8 @@ def main():
         save_grid(rows, palette, "icons", name, 3)
 
     make_extra()
+    make_late()
+    make_team()
 
     print("sprites gemaakt in", os.path.abspath(ASSETS))
 

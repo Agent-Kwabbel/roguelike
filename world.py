@@ -5,7 +5,7 @@ import pygame
 
 import sprites
 from buildings import Building, push_out
-from terrain import Terrain
+from terrain import Terrain, value_noise
 from settings import (
     W,
     H,
@@ -36,11 +36,13 @@ WATER = ("deep_water", "water")
 MOUNTAIN = ("rock", "snow")
 TILE_SPRITES = {"deep_water": "water_deep", "water": "water", "sand": "sand", "grass_high": "grass_dark",
                 "rock": "mountain", "snow": "snow"}
-# vijvers en strand worden voor de schaduw als vlak water gezien
+# ponds and beach count as flat water for the shading
 FLAT_HEIGHT = TERRAIN_LEVELS[2][1]
 MOUNTAIN_HEIGHT = TERRAIN_LEVELS[6][1]
-# binnen een berg om de zoveel hoogte een richeltje
+# inside a mountain a small ledge every so much height
 MOUNTAIN_STEP = 0.035
+# patches in the grass so a field isn't the same colour everywhere
+TINT_SCALE = 320
 
 
 class World:
@@ -50,7 +52,7 @@ class World:
         self.seed = seed
         self.chunks = {}
         self.terrain = Terrain(seed)
-        # gebouwen worden nooit vergeten, anders kan je ze opnieuw leeghalen
+        # buildings are never forgotten, otherwise you could loot them again
         self.buildings = {}
         self.looted = set()
 
@@ -62,7 +64,7 @@ class World:
         if rng.random() < BUILDING_CHANCE:
             kind = rng.choices(list(BUILDINGS.keys()), [b["weight"] for b in BUILDINGS.values()])[0]
             w, h = BUILDINGS[kind]["size"]
-            # minstens een tegel van de rand, zo past hij altijd in een chunk
+            # at least one tile from the edge, so it always fits in a chunk
             tx = rng.randint(1, CHUNK_TILES - 1 - w)
             ty = rng.randint(1, CHUNK_TILES - 1 - h)
             if self.flat_area(cx * CHUNK_TILES + tx - 1, cy * CHUNK_TILES + ty - 1, w + 2, h + 2):
@@ -107,12 +109,15 @@ class World:
         push_out(pos, radius, self.terrain.blocked_rects(pos, radius))
         return pos
 
-    def update(self, dt, player_pos):
-        """Daken laten vervagen en loot geven voor gebouwen waar je in de buurt komt."""
+    def update_roofs(self, dt, player_pos):
+        for building in self.nearby_buildings(player_pos):
+            building.update(dt, player_pos)
+
+    def loot_near(self, player_pos):
+        """Loot for buildings you get close to."""
         pickups = []
         orbs = []
         for building in self.nearby_buildings(player_pos):
-            building.update(dt, player_pos)
             key = building.rect.topleft
             if key not in self.looted:
                 self.looted.add(key)
@@ -122,7 +127,7 @@ class World:
         return pickups, orbs
 
     def build_chunk(self, cx, cy):
-        # zelfde seed per chunk, zodat hij er hetzelfde uitziet als je terugkomt
+        # same seed per chunk, so it looks the same when you come back
         rng = random.Random(hash((self.seed, cx, cy)))
         surface = pygame.Surface((CHUNK_SIZE, CHUNK_SIZE))
         grid = self.terrain.grid(cx, cy)
@@ -146,17 +151,20 @@ class World:
                 elif rng.random() < FLOWER_TILE_CHANCE:
                     name = "flowers"
                 else:
-                    name = f"grass_{rng.randrange(3)}"
+                    name = f"grass_{rng.randrange(4)}"
                 image = sprites.get(name)
                 if rng.random() < 0.5:
                     image = sprites.flipped(image)
                 surface.blit(image, (tx * TILE, ty * TILE))
-                # hoger gras is iets donkerder, zo zie je de terrassen beter
+                # higher grass is a bit darker, so the terraces stand out
                 if level == "grass_mid":
                     surface.fill((228, 232, 226), (tx * TILE, ty * TILE, TILE, TILE), special_flags=pygame.BLEND_RGB_MULT)
                 elif level == "grass_low":
                     surface.fill((10, 12, 0), (tx * TILE, ty * TILE, TILE, TILE), special_flags=pygame.BLEND_RGB_ADD)
+                if level in GRASS_LEVELS and name != "dirt":
+                    self.draw_details(surface, tx * TILE, ty * TILE, rng)
 
+        self.draw_tint(surface, cx, cy)
         self.draw_shading(surface, cx, cy)
         self.draw_edges(surface, cx, cy)
 
@@ -165,7 +173,7 @@ class World:
         blocked = None
         if building:
             building.draw_floor(surface, offset)
-            blocked = building.rect.move(-offset[0], -offset[1]).inflate(32, 32)
+            blocked = building.rect.inflate(32, 32).union(building.path_rect()).move(-offset[0], -offset[1])
 
         decorations = []
         if rng.random() < STRUCTURE_CHANCE:
@@ -176,7 +184,7 @@ class World:
             if self.deco_level(grid, x + image.get_width() / 2, y + image.get_height()) in GRASS_LEVELS:
                 decorations.append((y + image.get_height(), x, image))
 
-        # in vochtige stukken staat een bos
+        # damp areas get a forest
         moisture = self.terrain.moisture((cx + 0.5) * CHUNK_SIZE, (cy + 0.5) * CHUNK_SIZE)
         weights = dict(DECORATIONS)
         amount = rng.randint(DECO_PER_CHUNK[0], DECO_PER_CHUNK[1])
@@ -198,7 +206,7 @@ class World:
             if level not in GRASS_LEVELS and level != "sand":
                 continue
             decorations.append((y + image.get_height(), x, image))
-        # van boven naar onder tekenen zodat dingen goed overlappen
+        # draw top to bottom so things overlap correctly
         if blocked:
             free = []
             for deco in decorations:
@@ -217,13 +225,50 @@ class World:
             surface.blit(image, (x, bottom - image.get_height()))
         return surface
 
+    def draw_details(self, surface, x, y, rng):
+        # small blades, pebbles and flowers scattered over the tile
+        for _ in range(rng.randint(0, 3)):
+            bx = x + rng.randrange(4, TILE - 4)
+            by = y + rng.randrange(6, TILE - 2)
+            color = rng.choice([(48, 104, 52), (92, 170, 86), (60, 122, 60)])
+            pygame.draw.line(surface, color, (bx, by), (bx - 2, by - 6), 2)
+            pygame.draw.line(surface, color, (bx + 3, by), (bx + 4, by - 7), 2)
+        if rng.random() < 0.12:
+            px = x + rng.randrange(6, TILE - 6)
+            py = y + rng.randrange(6, TILE - 6)
+            pygame.draw.ellipse(surface, (95, 100, 95), (px, py + 1, 7, 5))
+            pygame.draw.ellipse(surface, (150, 152, 145), (px, py, 6, 4))
+        if rng.random() < 0.08:
+            fx = x + rng.randrange(4, TILE - 4)
+            fy = y + rng.randrange(4, TILE - 4)
+            color = rng.choice([(250, 250, 250), (255, 220, 70), (240, 130, 190), (170, 180, 255)])
+            pygame.draw.rect(surface, color, (fx, fy, 3, 3))
+
+    def draw_tint(self, surface, cx, cy):
+        count = CHUNK_TILES + 1
+        tint = pygame.Surface((count, count))
+        for j in range(count):
+            for i in range(count):
+                x = (cx * CHUNK_TILES + i) * TILE
+                y = (cy * CHUNK_TILES + j) * TILE
+                value = value_noise(x / TINT_SCALE, y / TINT_SCALE, self.seed + 900)
+                # dry is a bit more yellow, wet a bit more blue-green
+                r = int(232 + value * 23)
+                g = 245
+                b = int(240 - value * 30)
+                tint.set_at((i, j), (r, g, b))
+        size = CHUNK_SIZE + TILE
+        start = -TILE // 2
+        surface.blit(pygame.transform.smoothscale(tint, (size, size)), (start, start),
+                     special_flags=pygame.BLEND_RGB_MULT)
+
     def deco_level(self, grid, x, y):
         tx = min(CHUNK_TILES - 1, int(x // TILE))
         ty = min(CHUNK_TILES - 1, int(y // TILE))
         return grid[ty][tx]
 
     def draw_shading(self, surface, cx, cy):
-        """Hellingen naar het noordwesten lichter, naar het zuidoosten donkerder."""
+        """Slopes facing northwest lighter, facing southeast darker."""
         count = CHUNK_SIZE // SHADE_STEP + 1
         heights = []
         for j in range(-1, count + 1):
@@ -231,7 +276,7 @@ class World:
             for i in range(-1, count + 1):
                 x = cx * CHUNK_SIZE + i * SHADE_STEP
                 y = cy * CHUNK_SIZE + j * SHADE_STEP
-                # minder detail dan het echte terrein, anders lijkt het op wolken
+                # less detail than the real terrain, otherwise it looks like clouds
                 row.append(max(FLAT_HEIGHT, self.terrain.height(x, y, 2)))
             heights.append(row)
 
@@ -241,7 +286,7 @@ class World:
             for i in range(count):
                 slope_x = heights[j + 1][i + 2] - heights[j + 1][i]
                 slope_y = heights[j + 2][i + 1] - heights[j][i + 1]
-                # hoe hoger, hoe iets lichter
+                # a bit lighter the higher it goes
                 value = (slope_x + slope_y) * SHADE_STRENGTH * 255
                 if heights[j + 1][i + 1] > MOUNTAIN_HEIGHT:
                     value *= 2.5
@@ -259,7 +304,7 @@ class World:
         surface.blit(pygame.transform.smoothscale(light, (size, size)), (start, start), special_flags=pygame.BLEND_RGB_ADD)
 
     def draw_edges(self, surface, cx, cy):
-        """Randjes van terrassen, rotswanden en schuim langs het water."""
+        """Edges of terraces, rock walls and foam along the water."""
         overlay = pygame.Surface((CHUNK_SIZE, CHUNK_SIZE), pygame.SRCALPHA)
         for tx in range(CHUNK_TILES):
             for ty in range(CHUNK_TILES):
@@ -304,7 +349,7 @@ class World:
 
                 rank = LEVEL_RANK[level]
                 if north not in WATER and LEVEL_RANK[north] > rank:
-                    # voorkant van het terras erboven
+                    # front of the terrace above
                     pygame.draw.rect(overlay, (40, 30, 20, 110), (x, y, TILE, 6))
                     pygame.draw.rect(overlay, (0, 0, 0, 45), (x, y + 6, TILE, 6))
                 if south not in WATER and LEVEL_RANK[south] < rank:
@@ -334,7 +379,7 @@ class World:
         rng = random.Random(rng_seed)
         top = y + TILE - height
         pygame.draw.rect(surface, (96, 88, 96), (x, top, TILE, height))
-        # onderkant van de wand ligt in de schaduw
+        # bottom of the wall is in the shade
         pygame.draw.rect(surface, (74, 68, 78), (x, top + height // 2, TILE, height - height // 2))
         pygame.draw.rect(surface, (180, 175, 176), (x, top - 4, TILE, 4))
         line_x = x + rng.randrange(4, 12)
@@ -388,7 +433,7 @@ class World:
         self.prepare_next_chunk(first_cx, first_cy, last_cx, last_cy)
 
     def prepare_next_chunk(self, first_cx, first_cy, last_cx, last_cy):
-        # een rand om het scherm alvast klaarzetten, hooguit een per frame tegen haperen
+        # prepare a border around the screen ahead of time, at most one per frame to avoid stutter
         for cx in range(first_cx - 1, last_cx + 2):
             for cy in range(first_cy - 1, last_cy + 2):
                 if (cx, cy) not in self.chunks:

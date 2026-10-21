@@ -24,7 +24,7 @@ def read_json(path):
 
 
 def write_json(path, data):
-    # eerst naar een tijdelijk bestand, zo is de save nooit half geschreven
+    # write to a temp file first, so the save is never half written
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
@@ -47,7 +47,7 @@ def run_file(n=None):
 
 
 def migrate():
-    """De oude battlepass.json komt in slot 1 als die nog leeg is."""
+    """The old battlepass.json goes into slot 1 if that one is still empty."""
     if os.path.exists(OLD_SAVE) and not os.path.exists(profile_file(1)):
         data = read_json(OLD_SAVE)
         if data:
@@ -103,8 +103,8 @@ def delete_run():
         os.remove(run_file())
 
 
-STATE_KEYS = ("difficulty_key", "time", "spawn_timer", "next_boss", "stats", "freeze", "streak",
-              "event", "event_time", "next_event")
+STATE_KEYS = ("difficulty_key", "time", "spawn_timer", "next_boss", "stats", "freeze",
+              "event", "event_time", "next_event", "boss_count", "phase")
 
 
 def save_run(state):
@@ -119,8 +119,8 @@ def save_run(state):
             info[key] = value
     info["pos"] = list(player.pos)
     info["facing"] = list(player.facing)
-    info["weapons"] = [{"key": w.key, "level": w.level} for w in player.weapons]
-    # een open upgrade keuze gaat niet verloren
+    info["weapons"] = [{"key": w.key, "level": w.level, "evolved": w.evolved} for w in player.weapons]
+    # an open upgrade choice is not lost
     if state["choices"]:
         info["pending_upgrades"] += 1
     data["player"] = info
@@ -131,7 +131,8 @@ def save_run(state):
             continue
         data["enemies"].append({"kind": enemy.kind, "pos": list(enemy.pos), "minutes": enemy.minutes,
                                 "elite": enemy.elite, "hp": enemy.hp, "max_hp": enemy.max_hp,
-                                "speed": enemy.speed})
+                                "speed": enemy.speed, "affix": enemy.affix, "shield": enemy.shield,
+                                "enrage": enemy.can_enrage})
     data["orbs"] = [{"pos": list(o.pos), "value": o.value} for o in state["orbs"] if o.value > 0]
     data["pickups"] = [{"kind": p.kind, "pos": list(p.pos), "life": p.life} for p in state["pickups"]]
     data["seed"] = state["world"].seed
@@ -144,7 +145,7 @@ def load_run():
 
 
 def apply_run(state, data):
-    """Zet een opgeslagen run terug in een vers gemaakte state."""
+    """Put a saved run back into a freshly made state."""
     from enemy import Enemy
     from orb import Orb
     from pickup import Pickup
@@ -157,7 +158,7 @@ def apply_run(state, data):
     player = state["player"]
     info = data["player"]
     for key, value in info.items():
-        # skin en kogels komen van de save, die kan je in de tussentijd veranderd hebben
+        # skin and bullets come from the save, you might have changed them in the meantime
         if key in ("pos", "facing", "weapons", "sprite", "bullet_sprite"):
             continue
         if hasattr(player, key):
@@ -168,10 +169,13 @@ def apply_run(state, data):
     for weapon_info in info["weapons"]:
         weapon = make_weapon(weapon_info["key"])
         weapon.level = weapon_info["level"]
+        weapon.evolved = weapon_info.get("evolved", False)
         player.weapons.append(weapon)
 
     for item in data["enemies"]:
-        enemy = Enemy(item["kind"], item["pos"], item["minutes"], elite=item["elite"])
+        enemy = Enemy(item["kind"], item["pos"], item["minutes"], elite=item["elite"], affix=item.get("affix"))
+        enemy.shield = item.get("shield", 0)
+        enemy.can_enrage = item.get("enrage", False)
         enemy.hp = item["hp"]
         enemy.max_hp = item["max_hp"]
         enemy.speed = item["speed"]

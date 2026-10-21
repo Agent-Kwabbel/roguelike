@@ -3,6 +3,7 @@ import random
 import pygame
 
 import effects
+import sound
 import sprites
 from settings import (
     PLAYER_SPEED,
@@ -14,6 +15,7 @@ from settings import (
     PICKUP_RANGE,
     XP_BASE,
     XP_GROWTH,
+    XP_CURVE,
     PLAYER_SPRITE,
     BULLET_SPRITE,
     CRIT_MULTIPLIER,
@@ -22,6 +24,8 @@ from settings import (
     DASH_SPEED,
     DASH_DURATION,
     DASH_COOLDOWN_PLAYER,
+    REVIVE_TIME,
+    TEAM_COOLDOWN,
 )
 from weapons import Wand
 
@@ -54,7 +58,27 @@ class Player:
         self.bullet_sprite = bullet_sprite
         self.weapons = [Wand()]
         self.anim_time = 0
-        self.lifesteal = 0
+        # heal 1 hp every so many kills, 0 means no lifesteal
+        self.lifesteal_kills = 0
+        self.kill_counter = 0
+        self.cooldown = 1
+        self.area = 1
+        self.chest_upgrades = 0
+        self.bonus_coins = 0
+        self.streak = 0
+        self.streak_timer = 0
+        self.best_streak = 0
+        # co-op
+        self.coop = False
+        self.team_bonus = False
+        self.team_timer = 0
+        self.revives = 0
+        self.revive_speed = 1
+        self.medic = 0
+        self.medic_timer = 0
+        self.bond = 0
+        # a boss is chasing this player
+        self.hunted = False
         self.thorns = 0
         self.can_dash = False
         self.dash_timer = 0
@@ -62,6 +86,15 @@ class Player:
         self.boots_timer = 0
         self.potion_timer = 0
         self.still_time = 0
+        # online co-op
+        self.id = 0
+        self.name = "Player 1"
+        self.color = (255, 255, 255)
+        self.remote = False
+        self.downed = False
+        self.revive_timer = 0
+        self.choices = None
+        self.choice_timer = 0
 
     def read_input(self):
         keys = pygame.key.get_pressed()
@@ -82,31 +115,48 @@ class Player:
 
     def dash(self):
         if not self.can_dash or self.dash_cooldown > 0:
-            return
+            return False
         self.dash_timer = DASH_DURATION
         self.dash_cooldown = DASH_COOLDOWN_PLAYER
         self.invis_timer = max(self.invis_timer, DASH_DURATION + 0.1)
         effects.burst(self.pos, (200, 220, 255), 8)
+        sound.play("dash")
+        return True
 
     def update(self, dt):
         self.dash_cooldown = max(0, self.dash_cooldown - dt)
         self.boots_timer = max(0, self.boots_timer - dt)
         self.potion_timer = max(0, self.potion_timer - dt)
+        self.invis_timer = max(0, self.invis_timer - dt)
+        if self.downed:
+            self.move = pygame.Vector2(0, 0)
+            return
+        if self.remote:
+            # online players move on their own computer, the host only gets the position
+            if self.move.length() > 0:
+                self.anim_time += dt
+            self.update_regen(dt)
+            return
         if self.dash_timer > 0:
             self.dash_timer -= dt
             self.pos += self.facing * DASH_SPEED * dt
+            effects.dust(self.pos + (0, 16), 2)
         elif self.boots_timer > 0:
             self.pos += self.move * self.speed * BOOTS_SPEED * dt
             if self.move.length() > 0 and random.random() < 0.3:
                 effects.burst(self.pos + (0, 16), (255, 220, 80), 1)
         else:
             self.pos += self.move * self.speed * dt
-        self.invis_timer = max(0, self.invis_timer - dt)
         if self.move.length() > 0:
             self.anim_time += dt
             self.still_time = 0
+            if random.random() < 6 * dt:
+                effects.dust(self.pos + (0, 16))
         else:
             self.still_time += dt
+        self.update_regen(dt)
+
+    def update_regen(self, dt):
         if self.regen > 0 and self.hp < self.max_hp:
             self.regen_timer += dt * self.regen
             if self.regen_timer >= REGEN_TIME:
@@ -114,18 +164,29 @@ class Player:
                 self.hp += 1
                 effects.add_text(self.pos + (0, -24), "+1", (120, 240, 120))
 
-    def take_damage(self, amount):
-        """Geeft True als de klap echt aankwam (ook als hij geblokt werd)."""
-        if self.invis_timer > 0:
+    def take_damage(self, amount, unblockable=False):
+        """Returns True if the hit really landed (also when it was blocked)."""
+        if self.downed:
+            return False
+        if self.invis_timer > 0 and not unblockable:
             return False
         self.invis_timer = INVIS_TIME
-        if random.random() < self.armor:
-            effects.add_text(self.pos + (0, -24), "Geblokt", (140, 190, 255))
+        if random.random() < self.armor and not unblockable:
+            effects.add_text(self.pos + (0, -24), "Blocked", (140, 190, 255))
+            sound.play("blocked")
             return True
         self.hp -= amount
         effects.burst(self.pos, (220, 40, 40), 10)
-        effects.shake(6)
+        # online players get the shake and sound on their own computer
+        if not self.remote:
+            effects.shake(6, local=True)
+            sound.play_local("hurt")
         return True
+
+    def cooldown_factor(self):
+        if self.team_bonus:
+            return self.cooldown * (TEAM_COOLDOWN - 0.05 * self.bond)
+        return self.cooldown
 
     def heal(self, amount):
         self.hp = min(self.max_hp, self.hp + amount)
@@ -136,7 +197,8 @@ class Player:
         return damage, False
 
     def xp_needed(self):
-        return XP_BASE + (self.level - 1) * XP_GROWTH
+        level = self.level - 1
+        return XP_BASE + level * XP_GROWTH + XP_CURVE * level * level
 
     def add_xp(self, amount):
         if self.potion_timer > 0:
@@ -159,10 +221,17 @@ class Player:
             bullets += weapon.update(dt, self, enemies)
         return bullets
 
-    def draw(self, screen, camera):
+    def draw(self, screen, camera, name_tag=False):
+        if self.downed:
+            self.draw_downed(screen, camera)
+            return
+        if name_tag:
+            pos = self.pos - camera
+            pygame.draw.circle(screen, self.color, (pos.x, pos.y + 18), 16, 2)
+            draw_name(screen, self.name, self.color, (pos.x, pos.y - 42))
         for weapon in self.weapons:
             weapon.draw(screen, camera, self)
-        # knipperen tijdens invis frames
+        # blink during invincibility frames
         if self.invis_timer > 0 and int(self.invis_timer * 10) % 2 == 0:
             return
         pos = self.pos - camera
@@ -173,5 +242,25 @@ class Player:
             sprites.draw_centered(screen, sprites.faded(image, 0.3), pos - self.facing * 20)
             sprites.draw_centered(screen, sprites.faded(image, 0.5), pos - self.facing * 10)
 
-        pygame.draw.ellipse(screen, (30, 60, 30), (pos.x - 14, pos.y + image.get_height() / 2 - 8, 28, 10))
+        screen.blit(sprites.shadow(28), (pos.x - 14, pos.y + image.get_height() / 2 - 8))
         sprites.draw_centered(screen, image, pos)
+
+    def draw_downed(self, screen, camera):
+        pos = self.pos - camera
+        image = sprites.frame(self.sprite, 0, 8)
+        image = sprites.faded(pygame.transform.rotate(image, 90), 0.6)
+        screen.blit(sprites.shadow(28), (pos.x - 14, pos.y + 6))
+        sprites.draw_centered(screen, image, pos)
+        pygame.draw.circle(screen, (240, 80, 80), pos, 30, 2)
+        if self.revive_timer > 0:
+            rect = pygame.Rect(pos.x - 30, pos.y - 30, 60, 60)
+            angle = self.revive_timer / REVIVE_TIME * 6.283
+            pygame.draw.arc(screen, (120, 240, 120), rect, 1.571, 1.571 + angle, 4)
+        draw_name(screen, self.name, (240, 80, 80), (pos.x, pos.y - 46))
+
+
+def draw_name(screen, name, color, pos):
+    image = sprites.font(18).render(name, True, color)
+    shadow = sprites.font(18).render(name, True, (0, 0, 0))
+    screen.blit(shadow, (pos[0] - image.get_width() / 2 + 1, pos[1] + 1))
+    screen.blit(image, (pos[0] - image.get_width() / 2, pos[1]))

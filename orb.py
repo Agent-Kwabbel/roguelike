@@ -3,7 +3,7 @@ import math
 import pygame
 
 import sprites
-from settings import ORB_RADIUS
+from settings import ORB_RADIUS, ORB_COLOR
 
 
 class Orb:
@@ -30,4 +30,5 @@ class Orb:
 
     def draw(self, screen, camera, time):
         bob = math.sin(time * 4 + self.pos.x) * 2
+        sprites.draw_glow(screen, 14, ORB_COLOR, self.pos - camera + (0, bob))
         sprites.draw_centered(screen, sprites.get(self.sprite), self.pos - camera + (0, bob))
